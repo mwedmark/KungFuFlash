@@ -163,6 +163,65 @@ static void handle_unsupported(const char *file_name)
     handle_unsupported_ex("Unsupported", "File is not supported or invalid", file_name);
 }
 
+static void handle_sid(SID_HEADER* header, const char *file_name)
+{
+	char tabs[7] = "   ";
+	char songNameString[50];
+	sprintf(songNameString, "%s%s", tabs, header->songName);
+
+	char authorString[50];
+	sprintf(authorString, "%s%s" ,tabs, header->author);
+
+	char releasedString[50];
+	sprintf(releasedString, "%s%s",tabs, header->released);
+
+	char loadAddressString[25];
+	sprintf(loadAddressString, "%sLoad Address: 0x%.4x",tabs, header->loadAddress);
+
+	char initAddressString[25];
+	sprintf(initAddressString, "%sInit Address: 0x%.4x",tabs, header->initAddress);
+
+	char playAddressString[25];
+	sprintf(playAddressString, "%sPlay Address: 0x%.4x",tabs, header->playAddress);
+
+	char dataOffsetAddress[25];
+	sprintf(dataOffsetAddress, "%sData offset:  0x%.4x",tabs, header->dataOffset);
+
+	char magicIdString[25];
+	sprintf(magicIdString, "%sMagic ID: %.*s",tabs, header->magicID);
+
+	char numberOfSongsString[25];
+	sprintf(numberOfSongsString, "%sSong count: %d",tabs, header->songs);
+
+	char startSongString[25];
+	sprintf(startSongString, "%sStart song: %d",tabs, header->startSong);
+
+	char topline[255+20];
+	sprintf(topline, "FILENAME: %s", file_name);
+
+	 OPTIONS_STATE *options = build_options("SID information",topline);
+	 options_add_text(options, "ABOUT SONG");
+	 options_add_text(options, songNameString);
+	 options_add_text(options, authorString);
+	 options_add_text_block(options, releasedString);
+	 options_add_text(options, "ADDRESSES");
+	 options_add_text(options, loadAddressString);
+	 options_add_text(options, initAddressString);
+	 options_add_text(options, playAddressString);
+	 options_add_text(options, dataOffsetAddress);
+	 options_add_text_block(options, magicIdString);
+	 options_add_text(options, "SONG PARTS");
+	 options_add_text(options, numberOfSongsString);
+	 options_add_text_block(options, startSongString);
+	 options_add_dir(options, "OK");
+	 handle_options(options);
+
+	//handle_unsupported_ex("SID Info", "test", header->released);
+	//options_add_text_block(options, header->songName);
+	//options_add_dir(options, "OK");
+}
+
+
 static void handle_unsaved_crt(const char *file_name, void (*handle_save)(uint8_t))
 {
     OPTIONS_STATE *options = build_options("Unsaved changes",
@@ -212,6 +271,11 @@ static void handle_file_options(const char *file_name, uint8_t file_type, uint8_
             select_text = "Mount and load";
             mount_text = "Load"; // No mount
             break;
+        case FILE_SID:
+			select_text = "Load";
+			//vic_text = "Execute SID";
+			delete_option = true;
+			break;
 
         default:
             select_text = "Select";

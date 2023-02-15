@@ -119,6 +119,31 @@ typedef struct
     char filename[17];
     uint8_t rel_record_size;
 } P00_HEADER;
+
+#define SID_SIGNATURE "PSID"
+#define RSID_SIGNATURE "RSID"
+
+typedef struct
+{
+    char magicID[4]; 		// only 'PSID' support (not RSID) 0x00
+    uint16_t version;		// 0x0002 only support could be 0,1,2,3,4 0x04
+    uint16_t dataOffset; 	// Size of sid header, either 0x76 (1) or 0x7c (2,3,4) 0x06
+    uint16_t loadAddress; 	// if 0, org. C64 format first 2 bytes Little end. (lo/hi) load address 0x08
+    uint16_t initAddress; 	// init song sub routine start address 0x0A
+    uint16_t playAddress; 	// play song sub routine address, called freq. (50 times/sec) 0x0C
+    uint16_t songs;			// number of songs in SID file 1-256 0x0E
+    uint16_t startSong;		// song number to be played by default 0x10
+    uint32_t speed;         // 32 bit big endian number, 0x12
+    char songName[32];		// song info: song name 0x16 should be 32 but this looks ok?
+    char author[32];		// song info: song author 0x36
+    char released[32];		// song info: copyright info / release info 0x56
+	//SID header V2 ONLY
+    uint16_t flags; // 0x76
+    char startPage; // 0x78
+    char pageLength; // 0x79
+    char secondSIDAddress; //0x7A
+    char thirdSIDAddress; //0x7B
+} SID_HEADER;
 #pragma pack(pop)
 
 typedef enum {
@@ -129,6 +154,7 @@ typedef enum {
     FILE_D64,
     FILE_D64_PRG,
     FILE_ROM,
+	FILE_SID,
 
     FILE_UPD        = 0xfd,
     FILE_DAT,
@@ -143,6 +169,7 @@ typedef enum {
     DAT_NONE = 0x00,
     DAT_CRT,
     DAT_PRG,
+	DAT_SID,
     DAT_USB,
     DAT_DISK,
     DAT_KERNAL,
@@ -199,5 +226,8 @@ typedef struct
 #define ELEMENT_NOT_SELECTED 0xffff
 #define DAT_SIGNATURE "KungFu:\1"
 
+#pragma pack(push)
+#pragma pack(1)
 DAT_HEADER dat_file;
 __attribute__((__section__(".sram"))) uint8_t dat_buffer[64*1024];
+#pragma pack(pop)

@@ -1,0 +1,1 @@
+F:\Projects\KungFuFlash\3rd_party\ef3utils\ef3usb.exe COM4 s %1

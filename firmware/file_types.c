@@ -92,6 +92,13 @@ static uint8_t get_file_type(FILINFO *info)
                 return FILE_P00;
             }
         }
+        else if (compare_extension(filename, "SID"))
+	   {
+		   if (info->fsize > sizeof(SID_HEADER))
+		   {
+			   return FILE_SID;
+		   }
+	   }
         else if (compare_extension(filename, "CRT"))
         {
             if (info->fsize > sizeof(CRT_HEADER))

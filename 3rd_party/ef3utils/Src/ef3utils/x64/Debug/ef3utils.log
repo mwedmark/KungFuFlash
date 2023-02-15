@@ -1,0 +1,29 @@
+﻿  ef3usb.c
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(145,38): warning C4133: 'function': incompatible types - from 'char [10]' to 'LPCWSTR'
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(208,51): warning C4267: 'function': conversion from 'size_t' to 'DWORD', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(230,52): warning C4267: 'function': conversion from 'size_t' to 'DWORD', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(673,22): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1096,36): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1157,36): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1335,24): warning C4477: 'printf' : format string '%7ld' requires an argument of type 'long', but variadic argument 1 has type 'size_t'
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1335,24): message : consider using '%zd' in the format string
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1403,26): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1439,42): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1447,33): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1460,42): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1466,34): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1477,26): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1554,20): warning C4477: 'printf' : format string '%6ld' requires an argument of type 'long', but variadic argument 1 has type 'size_t'
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1554,20): message : consider using '%zd' in the format string
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1631,20): warning C4477: 'printf' : format string '%6ld' requires an argument of type 'long', but variadic argument 1 has type 'size_t'
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1631,20): message : consider using '%zd' in the format string
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(982,30): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1209,32): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1411,49): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1649,32): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1717,46): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(499,7): warning C4101: 'batch': unreferenced local variable
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(498,7): warning C4101: 'len': unreferenced local variable
+F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3usb.c(1350,17): warning C4101: 'size': unreferenced local variable
+  ef3utils.cpp
+  ef3utils.vcxproj -> F:\Projects\KungFuFlash\3rd_party\ef3utils\Src\ef3utils\x64\Debug\ef3utils.exe

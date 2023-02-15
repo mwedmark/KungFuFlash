@@ -27,6 +27,8 @@
 #define EAPI_OFFSET 0x3800
 #define EAPI_SIZE   0x300
 
+#include "sidasm.h"
+
 static inline bool prg_size_valid(uint16_t size)
 {
     // PRG should at least have a 2 byte load address and 1 byte of data
@@ -36,11 +38,42 @@ static inline bool prg_size_valid(uint16_t size)
 static bool prg_load_file(FIL *file)
 {
     uint16_t len = file_read(file, dat_buffer, sizeof(dat_buffer));
+    //memcpy(dat_buffer, SidData,SidDataSize); // TEST
     dbg("Loaded PRG size: %u\n", len);
 
     if (prg_size_valid(len))
     {
         dat_file.prg.size = len;
+        return true;
+    }
+
+    dat_file.prg.size = 0;
+    return false;
+}
+
+static void writeDatBufferAsDebugFile()
+{
+	FIL myFile;
+	//mifile->
+	const char debugFilePath[256] = "output.bin";
+	if (!file_open(&myFile, debugFilePath, FA_WRITE|FA_CREATE_ALWAYS)) // || !file_write(&myFile, dat_file.crt.banks))
+	{
+		file_write(&myFile, debugFilePath, 11);
+		file_close(&myFile);
+	}
+}
+
+static bool sid_load_file(FIL *file)
+{
+	memcpy(dat_buffer, SidData,SidDataSize); // loading sid file into C64 mem @0x5800 to leave place @$1000=>
+	uint16_t len = file_read(file, dat_buffer+0x5800, 14000);//sizeof(dat_buffer)-0x4FFF); // is real 0x5800 in C64 after load of BASIC start program
+    dbg("Loaded SID size: %u\n", SidDataSize);
+
+   // writeDatBufferAsDebugFile();
+    //file_save();
+    if (prg_size_valid(0x5800)) // load full space of data up until KERNAL @$A000
+    {
+        dat_file.prg.size = 0x5800+14000; //SidDataSize
         return true;
     }
 
@@ -68,6 +101,62 @@ static bool p00_load_file(FIL *file)
     }
 
     return false;
+}
+
+
+static bool hasRSidSignature(SID_HEADER* header)
+{
+    return memcmp(RSID_SIGNATURE, header->magicID, sizeof(header->magicID)) == 0;
+}
+
+static bool hasSidSignature(SID_HEADER* header)
+{
+    return memcmp(SID_SIGNATURE, header->magicID, sizeof(header->magicID)) == 0;
+}
+
+
+static bool sid_load_header(FIL *file, SID_HEADER *header)
+{
+	const int sidV2HeaderSize = 0x7c;
+
+	uint32_t len = file_read(file, header, sidV2HeaderSize);
+	header->version = __REV16(header->version);
+	header->dataOffset = __REV16(header->dataOffset);
+	header->loadAddress = __REV16(header->loadAddress);
+	header->initAddress = __REV16(header->initAddress);
+	header->playAddress = __REV16(header->playAddress);
+	header->songs = __REV16(header->songs);
+	header->startSong = __REV16(header->startSong);
+	header->speed = __REV(header->speed);
+	header->flags = __REV16(header->flags);
+
+	if(header->version == 0x0001)
+	{
+		if(len < 0x76 || header->dataOffset != 0x76)
+		{
+			wrn("File size less than SID header v1 size or dataOffset is not 0x76\n");
+			return false;
+		}
+		// set 0 on stuff not used
+		header->flags = 0;
+		header->startPage = 0;
+		header->secondSIDAddress = 0;
+		header->thirdSIDAddress = 0;
+	}
+
+	if (header->version == 0x0002 && (len <  0x7c || header->dataOffset != 0x7c))
+	{
+		wrn("File size less than SID header v2 size or dataOffset is not 0x7c\n");
+		return false;
+	}
+
+	if(!hasRSidSignature(header) && !hasSidSignature(header))
+	{
+		wrn("Unsupported SID header type\n");
+		return false;
+	}
+
+	return true;
 }
 
 static bool crt_load_header(FIL *file, CRT_HEADER *header)
@@ -511,6 +600,28 @@ static void send_prg(void)
     }
 }
 
+//static void send_sidprg(void)
+//{
+//    const char *name;
+//    if (dat_file.prg.name[0])
+//    {
+//        name = dat_file.prg.name;
+//    }
+//    else
+//    {
+//        name = dat_file.file;
+//    }
+//
+//    sprint(scratch_buf, "Converting SID to PRG...\r\n\r\n%s", name);
+//    c64_send_message(scratch_buf);
+//
+//    if(!c64_send_prg(SidData, SidDataSize))
+//    {
+//        system_restart();
+//    }
+//}
+
+
 static bool load_d64(void)
 {
     if (!chdir_last())
@@ -548,6 +659,17 @@ static bool c64_set_mode(void)
             }
         }
         break;
+
+        case DAT_SID:
+		{
+			//result = prg_size_valid(dat_file.prg.size);
+			if (result)
+			{
+				c64_enable();
+				send_prg();
+			}
+		}
+		break;
 
         case DAT_CRT:
         {

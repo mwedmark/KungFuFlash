@@ -3,6 +3,7 @@
  * Uses serial port instead of ftdi
  * Added interleave for turbo image write
 */
+#pragma warning(disable : 4996)
 
 #include <stdio.h>
 #include <string.h>

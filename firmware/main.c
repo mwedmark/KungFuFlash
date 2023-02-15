@@ -40,47 +40,63 @@ int main(void)
     c64_launcher_mode();
 
     bool sd_msg_shown = false;
+	int sd_mount_counter = 10;
+	char missingSdMessage[100] = "Please insert a FAT formatted SD card   ";
     while (!mount_sd_card())
     {
         if (!sd_msg_shown)
         {
             c64_enable();
-            c64_send_message("Please insert a FAT formatted SD card");
+            //c64_send_message(missingSdMessage);
             sd_msg_shown = true;
         }
 
         delay_ms(1000);
+		if(--sd_mount_counter == 0)
+		{
+			c64_send_message("Skipping SD card support..              Entering USB ONLY Mode!");
+			delay_ms(1000);
+			break;
+		}
+		else
+		{
+			strcat(missingSdMessage,".");
+			c64_send_message(missingSdMessage);
+		}
     }
 
-    if (!auto_boot())
-    {
-        c64_enable();
-        menu_loop();
-    }
+	if(sd_msg_shown != true)
+	{
+		if (!auto_boot())
+		{
+			c64_enable();
+			menu_loop();
+		}
 
-    if (dat_file.boot_type == DAT_CRT || dat_file.boot_type == DAT_DISK)
-    {
-        // Disable all interrupts besides the C64 bus handler beyond this point
-        // to ensure consistent response times
-        usb_disable();
-    }
+		if (dat_file.boot_type == DAT_CRT || dat_file.boot_type == DAT_DISK)
+		{
+			// Disable all interrupts besides the C64 bus handler beyond this point
+			// to ensure consistent response times
+			usb_disable();
+		}
 
-    if (!c64_set_mode())
-    {
-        c64_disable();
-        restart_to_menu();
-    }
+		if (!c64_set_mode())
+		{
+			c64_disable();
+			restart_to_menu();
+		}
 
-    if (dat_file.boot_type == DAT_DISK)
-    {
-        disk_loop();
-    }
-    else if (dat_file.boot_type == DAT_CRT &&
-             dat_file.crt.type == CRT_EASYFLASH)
-    {
-        eapi_loop();
-    }
-
+		if (dat_file.boot_type == DAT_DISK)
+		{
+			disk_loop();
+		}
+		else if (dat_file.boot_type == DAT_CRT &&
+				 dat_file.crt.type == CRT_EASYFLASH)
+		{
+			eapi_loop();
+		}
+	}
+	
     dbg("In main loop...\n");
     while (true)
     {

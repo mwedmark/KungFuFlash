@@ -462,6 +462,7 @@ static bool handle_load_file(const char *file_name, uint8_t file_type, uint8_t f
     {
         case FILE_PRG:
         case FILE_P00:
+        case FILE_SID:
         {
             FIL file;
             handle_file_open(&file, file_name);
@@ -472,9 +473,13 @@ static bool handle_load_file(const char *file_name, uint8_t file_type, uint8_t f
             {
                 prg_loaded = prg_load_file(&file);
             }
-            else
+            else if ( file_type == FILE_P00)
             {
                 prg_loaded = p00_load_file(&file);
+            }
+            else if( file_type == FILE_SID)
+            {
+            	prg_loaded = sid_load_file(&file);
             }
 
             if (prg_loaded)
@@ -490,6 +495,7 @@ static bool handle_load_file(const char *file_name, uint8_t file_type, uint8_t f
             }
 
             file_close(&file);
+            //writeDatBufferAsDebugFile();
         }
         break;
 
@@ -567,6 +573,53 @@ static bool handle_load_file(const char *file_name, uint8_t file_type, uint8_t f
         }
         break;
 
+//        case FILE_SID:
+//        {
+//        	FIL file;
+//        	//SID_HEADER header;
+//        	handle_file_open(&file, file_name);
+////        	if(sid_load_header(&file, &header))
+////        	{
+////        		handle_sid(&header, file_name);
+////        	}
+////        	else
+////        	{
+////        		handle_unsupported(file_name);
+////        	}
+//        	//FIL file;
+//			//handle_file_open(&file, file_name);
+//		//	dat_file.prg.name[0] = 0;
+//
+//        	bool prg_loaded = true;
+//			//if (file_type == FILE_SID)
+//			//{
+//			//sid_load_file(&file);
+//
+//			//}
+//			//else
+//		//	{
+//				//prg_loaded = p00_load_file(&file);
+//			//}
+//
+//        	sid_load_file(&file);
+//
+//        	if (prg_loaded)
+//			{
+//				c64_send_exit_menu();
+//				dat_file.prg.element = 0;
+//				dat_file.boot_type = DAT_PRG;
+//				exit_menu = true;
+//			}
+//			else
+//			{
+//				handle_unsupported(file_name);
+//			}
+//
+//			file_close(&file);
+//
+//        }
+//        break;
+
         case FILE_UPD:
         {
             if (!(flags & SELECT_FLAG_ACCEPTED))
@@ -598,7 +651,6 @@ static bool handle_load_file(const char *file_name, uint8_t file_type, uint8_t f
             }
         }
         break;
-
         case FILE_DAT:
         {
             handle_unsupported_ex("System File", "This file is used by Kung Fu Flash", file_name);
