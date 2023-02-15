@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -33,7 +33,7 @@ static void sysclk_config(void)
     // Enable HSE
     RCC->CR |= RCC_CR_HSEON;
     // Wait till HSE is ready
-    while(!(RCC->CR & RCC_CR_HSERDY));
+    while (!(RCC->CR & RCC_CR_HSERDY));
 
     // Enable power interface clock
     RCC->APB1ENR |= RCC_APB1ENR_PWREN;
@@ -57,7 +57,7 @@ static void sysclk_config(void)
     // Enable the main PLL
     RCC->CR |= RCC_CR_PLLON;
     // Wait till the main PLL is ready
-    while(!(RCC->CR & RCC_CR_PLLRDY));
+    while (!(RCC->CR & RCC_CR_PLLRDY));
 
     // Enable prefetch, instruction cache and data cache
     // Set latency to 5 wait states
@@ -67,7 +67,7 @@ static void sysclk_config(void)
     // Select the main PLL as system clock source
     MODIFY_REG(RCC->CFGR, RCC_CFGR_SWS, RCC_CFGR_SW_PLL);
     // Wait till the main PLL is used as system clock source
-    while(!(RCC->CFGR & RCC_CFGR_SWS_PLL));
+    while (!(RCC->CFGR & RCC_CFGR_SWS_PLL));
 }
 
 /*************************************************
@@ -78,14 +78,14 @@ static inline void timer_reset(void)
     SysTick->VAL = 0;
 }
 
-static inline void timer_start_us(uint32_t us)
+static inline void timer_start_us(u32 us)
 {
     SysTick->LOAD = (168 / 8) * us;
     timer_reset();
 }
 
 // Max supported value is 798 ms
-static inline void timer_start_ms(uint32_t ms)
+static inline void timer_start_ms(u32 ms)
 {
     timer_start_us(1000 * ms);
 }
@@ -95,15 +95,15 @@ static inline bool timer_elapsed()
     return (SysTick->CTRL & SysTick_CTRL_COUNTFLAG_Msk);
 }
 
-static inline void delay_us(uint32_t us)
+static inline void delay_us(u32 us)
 {
     timer_start_us(us);
-    while(!timer_elapsed());
+    while (!timer_elapsed());
 }
 
-static void delay_ms(uint32_t ms)
+static void delay_ms(u32 ms)
 {
-    for (uint32_t i=0; i<ms; i++)
+    for (u32 i=0; i<ms; i++)
     {
         delay_us(1000);
     }
@@ -116,6 +116,18 @@ static void systick_config(void)
 
     // Enable SysTick timer and use HCLK/8 as clock source
     SysTick->CTRL = SysTick_CTRL_ENABLE_Msk;
+}
+
+/*************************************************
+* Floating-point unit
+*************************************************/
+static void fpu_config(void)
+{
+    // No automatic FPU state preservation
+    MODIFY_REG(FPU->FPCCR, FPU_FPCCR_LSPEN_Msk|FPU_FPCCR_ASPEN_Msk, 0);
+
+    // No floating-point context active
+    __set_CONTROL(0);
 }
 
 /*************************************************
@@ -141,7 +153,7 @@ static inline void crc_reset(void)
 
 static void crc_calc(void *buf, size_t len)
 {
-    uint32_t *buf32 = (uint32_t *)buf;
+    u32 *buf32 = (u32 *)buf;
     while (len)
     {
         CRC->DR = *buf32++;
@@ -149,7 +161,7 @@ static void crc_calc(void *buf, size_t len)
     }
 }
 
-static inline uint32_t crc_get(void)
+static inline u32 crc_get(void)
 {
     return CRC->DR;
 }
@@ -165,7 +177,7 @@ static void crc_config(void)
 
 /************************************************/
 
-static void system_restart(void)
+NO_RETURN system_restart(void)
 {
     filesystem_unmount();
     led_off();
@@ -175,7 +187,7 @@ static void system_restart(void)
     while (true);
 }
 
-static void restart_to_menu(void)
+NO_RETURN restart_to_menu(void)
 {
     set_menu_signature();
     system_restart();
@@ -185,6 +197,7 @@ static void restart_to_menu(void)
 static void configure_system(void)
 {
     sysclk_config();
+    fpu_config();
     dwt_cyccnt_config();
     systick_config();
 

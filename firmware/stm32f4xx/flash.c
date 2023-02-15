@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -43,10 +43,10 @@ Sector  Size
     .   .
    11   128 Kbytes
 */
-static void flash_sector_erase(uint8_t sector)
+static void flash_sector_erase(u8 sector)
 {
     // Wait if a flash memory operation is in progress
-    while(FLASH->SR & FLASH_SR_BSY);
+    while (FLASH->SR & FLASH_SR_BSY);
 
     // Set sector number and parallelism to x32
     MODIFY_REG(FLASH->CR, FLASH_CR_PSIZE|FLASH_CR_SNB|FLASH_CR_MER|FLASH_CR_PG,
@@ -57,48 +57,48 @@ static void flash_sector_erase(uint8_t sector)
     FLASH->CR |= FLASH_CR_STRT;
 
     // Wait for the operation to complete
-    while(FLASH->SR & FLASH_SR_BSY);
+    while (FLASH->SR & FLASH_SR_BSY);
 }
 
 static void flash_program(void *dest, void *src, size_t bytes)
 {
-    volatile uint32_t *dest_ptr = (uint32_t *)dest;
-    uint32_t *src_ptr = (uint32_t *)src;
+    volatile u32 *dest_ptr = (u32 *)dest;
+    u32 *src_ptr = (u32 *)src;
 
     // Wait if a flash memory operation is in progress
-    while(FLASH->SR & FLASH_SR_BSY);
+    while (FLASH->SR & FLASH_SR_BSY);
 
     // Activate flash programming
     MODIFY_REG(FLASH->CR, FLASH_CR_SER, FLASH_CR_PG);
 
-	for(size_t i=0; i<bytes; i+=4)
+	for (size_t i=0; i<bytes; i+=4)
     {
 		*dest_ptr++ = *src_ptr++;
-		while(FLASH->SR & FLASH_SR_BSY);
+		while (FLASH->SR & FLASH_SR_BSY);
 	}
 
     // Deactivate flash programming
     FLASH->CR &= ~FLASH_CR_PG;
 }
 
-static void flash_program_byte(uint8_t *dest, uint8_t byte)
+static void flash_program_byte(u8 *dest, u8 byte)
 {
     flash_unlock();
     // Wait if a flash memory operation is in progress
-    while(FLASH->SR & FLASH_SR_BSY);
+    while (FLASH->SR & FLASH_SR_BSY);
 
     // Activate flash programming and set parallelism to x8
     MODIFY_REG(FLASH->CR, FLASH_CR_PSIZE|FLASH_CR_MER|FLASH_CR_SER, FLASH_CR_PG);
 
     *dest = byte;
-    while(FLASH->SR & FLASH_SR_BSY);
+    while (FLASH->SR & FLASH_SR_BSY);
 
     // Deactivate flash programming
     FLASH->CR &= ~FLASH_CR_PG;
     flash_lock();
 }
 
-static void flash_sector_program(int8_t sector, void *dest, void *src, size_t bytes)
+static void flash_sector_program(s8 sector, void *dest, void *src, size_t bytes)
 {
     // Prevent anything executing from flash
     __disable_irq();

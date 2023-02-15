@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -38,7 +38,7 @@
 #include "diskio.h"
 
 #define BIT30 (1 << 30)
-#define BIT31 ((uint32_t)(1 << 31))
+#define BIT31 ((u32)(1 << 31))
 
 #define RESP_NONE  0
 #define RESP_SHORT 1
@@ -62,9 +62,14 @@
                              SDIO_ICR_TXUNDERRC | SDIO_ICR_DTIMEOUTC |  \
                              SDIO_ICR_DCRCFAILC)
 
-static uint16_t card_rca;
-static uint8_t card_type;
-static uint8_t card_info[36]; /* CSD, CID, OCR */
+
+#define SDIO_STA_TRX_ERROR_FLAGS    (SDIO_STA_DCRCFAIL | SDIO_STA_DTIMEOUT |    \
+                                     SDIO_STA_TXUNDERR | SDIO_STA_RXOVERR |     \
+                                     SDIO_STA_STBITERR)
+
+static u32 card_rca;
+static u8 card_type;
+static u8 card_info[36];    // CSD, CID, OCR
 
 static DSTATUS dstatus = STA_NOINIT;
 
@@ -114,6 +119,8 @@ static void sdio_init(void)
     delay_us(10);
     SDIO->CLKCR = SDIO_CLKCR_CLKEN | ((48000 / 400) - 2); /* clk set to 400kHz */
     delay_us(200);  // Wait for 80 cycles at 400kHz
+
+    SDIO->DTIMER = 24000000;
 }
 
 static void sdio_deinit(void)
@@ -147,18 +154,17 @@ static void sdio_deinit(void)
     MODIFY_REG(GPIOD->PUPDR, GPIO_PUPDR_PUPD2, 0);
 }
 
-static void byte_swap(uint8_t *dest, uint32_t src)
+static void byte_swap(u8 *dest, u32 src)
 {
-    int i;
-    for (i = 0; i < 4; i ++)
-        dest[i] = src >> (24 - 8 * i);
+    u32 *dest32 = (u32 *)dest;
+    *dest32 = __REV(src);
 }
 
-static bool sdio_cmd_send(uint16_t idx, uint32_t arg, int resp_type, uint32_t *buf)
+static bool sdio_cmd_send(u8 idx, u32 arg, int resp_type, u32 *buf)
 {
     if (IS_ACMD(idx)) // ACMD class
     {
-        if (!sdio_cmd_send(55, ((uint32_t)card_rca) << 16, RESP_SHORT, buf) ||
+        if (!sdio_cmd_send(55, card_rca, RESP_SHORT, buf) ||
             !(buf[0] & 0x00000020))
         {
             return false;
@@ -167,7 +173,7 @@ static bool sdio_cmd_send(uint16_t idx, uint32_t arg, int resp_type, uint32_t *b
 
     idx &= SDIO_CMD_CMDINDEX;
 
-    uint32_t cmd = SDIO_CMD_CPSMEN | idx;
+    u32 cmd = SDIO_CMD_CPSMEN | idx;
     if (resp_type == RESP_SHORT)
     {
         cmd |= SDIO_CMD_WAITRESP_0;
@@ -178,6 +184,7 @@ static bool sdio_cmd_send(uint16_t idx, uint32_t arg, int resp_type, uint32_t *b
     }
 
     SDIO->ICR = SDIO_ICR_CMD_FLAGS;
+    __DSB();
     SDIO->ARG = arg;
     SDIO->CMD = cmd;
 
@@ -190,7 +197,7 @@ static bool sdio_cmd_send(uint16_t idx, uint32_t arg, int resp_type, uint32_t *b
     }
     else
     {
-        uint32_t sta;
+        u32 sta;
         // Wait for response
         do
         {
@@ -201,10 +208,10 @@ static bool sdio_cmd_send(uint16_t idx, uint32_t arg, int resp_type, uint32_t *b
         // Check if timeout
         if (sta & SDIO_STA_CTIMEOUT)
         {
-            // Don't get spammed if no card is inserted
-            if (idx != 1 && idx != 41)
+            // Don't get spammed if no card is inserted or if card is removed
+            if (idx != 1 && idx != 13 && idx != 41)
             {
-                err("%s timeout idx=%d arg=%08x\n", __func__, idx, arg);
+                err("%s timeout idx=%u arg=%08x", __func__, idx, arg);
             }
             return false;
         }
@@ -215,7 +222,7 @@ static bool sdio_cmd_send(uint16_t idx, uint32_t arg, int resp_type, uint32_t *b
             // Ignore CRC error for these commands
             if (idx != 1 && idx != 12 && idx != 41)
             {
-                err("%s crcfail idx=%d arg=%08x\n", __func__, idx, arg);
+                err("%s crcfail idx=%u arg=%08x", __func__, idx, arg);
                 return false;
             }
         }
@@ -232,28 +239,29 @@ static bool sdio_cmd_send(uint16_t idx, uint32_t arg, int resp_type, uint32_t *b
     return true;
 }
 
-static bool sdio_check_tran(uint32_t tout_ms)
+static bool sdio_check_ready(u32 tout_ms)
 {
-    uint32_t resp;
+    u32 resp;
 
     timer_start_ms(tout_ms);
     while (!timer_elapsed())
     {
-        if (sdio_cmd_send(13, ((uint32_t)card_rca) << 16, RESP_SHORT, &resp)
-            && ((resp & 0x01e00) == 0x00800))
+        if (sdio_cmd_send(13, card_rca, RESP_SHORT, &resp)
+            && (resp & 0x0100))
         {
             return true;
         }
     }
 
+    err("sdio timeout");
     return false;
 }
 
 DSTATUS disk_initialize(BYTE pdrv)
 {
-    uint32_t resp[4];
-    uint16_t cmd;
-    uint8_t timeouts;
+    u32 resp[4];
+    u8 cmd;
+    u8 timeouts;
     int i;
 
     card_rca = 0;
@@ -262,9 +270,9 @@ DSTATUS disk_initialize(BYTE pdrv)
 
     // Note: No support for card detect (SDIO_CD)
 
-    if(!sdio_cmd_send(0, 0, RESP_NONE, NULL))
+    if (!sdio_cmd_send(0, 0, RESP_NONE, NULL))
     {
-        err("could not reset card\n");
+        err("could not reset card");
         goto fail;
     }
 
@@ -281,7 +289,7 @@ DSTATUS disk_initialize(BYTE pdrv)
                 (resp[0] & BIT31))
             {
                 card_type = (resp[0] & BIT30) ? CT_SD2 | CT_BLOCK : CT_SD2;
-                log("card type: SD2\n");
+                dbg("card type: SD2");
                 break;
             }
         }
@@ -289,7 +297,7 @@ DSTATUS disk_initialize(BYTE pdrv)
 
         if (!card_type)
         {
-            err("could not read card type\n");
+            err("could not read card type");
             goto fail;
         }
     }
@@ -319,14 +327,14 @@ DSTATUS disk_initialize(BYTE pdrv)
 
             if (timer_elapsed() && --timeouts)
             {
-                err("cmd %d failed\n", cmd);
+                err("cmd %u failed", cmd);
                 goto fail;
             }
         }
     }
 
     byte_swap(&card_info[32], resp[0]);
-    log("card OCR: %08x\n", ((uint32_t*)card_info)[8]);
+    dbg("card OCR: %08x", ((u32*)card_info)[8]);
 
     // card state 'ready'
     if (!sdio_cmd_send(2, 0, RESP_LONG, resp)) // enter ident state
@@ -347,7 +355,7 @@ DSTATUS disk_initialize(BYTE pdrv)
             goto fail;
         }
 
-        card_rca = (uint16_t)(resp[0] >> 16);
+        card_rca = resp[0] & 0xFFFF0000;
     }
     else
     {
@@ -356,11 +364,11 @@ DSTATUS disk_initialize(BYTE pdrv)
             goto fail;
         }
 
-        card_rca = 1;
+        card_rca = 1 << 16;
     }
 
     // card state 'standby'
-    if (!sdio_cmd_send(9, ((uint32_t)card_rca) << 16, RESP_LONG, resp))
+    if (!sdio_cmd_send(9, card_rca, RESP_LONG, resp))
     {
         goto fail;
     }
@@ -370,7 +378,7 @@ DSTATUS disk_initialize(BYTE pdrv)
         byte_swap(&card_info[i * 4], resp[i]);
     }
 
-    if (!sdio_cmd_send(7, ((uint32_t)card_rca) << 16, RESP_SHORT, resp))
+    if (!sdio_cmd_send(7, card_rca, RESP_SHORT, resp))
     {
         goto fail;
     }
@@ -384,7 +392,7 @@ DSTATUS disk_initialize(BYTE pdrv)
         }
     }
 
-    uint32_t clkcr = SDIO->CLKCR;
+    u32 clkcr = SDIO->CLKCR;
     if (card_type & CT_SDC)
     {
         // Set wide bus
@@ -396,10 +404,10 @@ DSTATUS disk_initialize(BYTE pdrv)
         clkcr = (clkcr & ~SDIO_CLKCR_WIDBUS) | SDIO_CLKCR_WIDBUS_0;
     }
 
-    // Increase clock up to 9.6MHz (SDIOCLK / [CLKDIV + 2])
+    // Increase clock frequency to 12MHz (SDIOCLK / [CLKDIV + 2])
     // We will get timeouts at higher frequencies when the C64 bus interface is active
-    SDIO->CLKCR = (clkcr & ~SDIO_CLKCR_CLKDIV) | 3;
-    delay_us(9);  // Wait for 80 cycles at 9.6MHz
+    SDIO->CLKCR = (clkcr & ~SDIO_CLKCR_CLKDIV) | 2;
+    delay_us(7);    // Wait for 80 cycles at 12MHz
 
     dstatus &= ~STA_NOINIT;
     return RES_OK;
@@ -415,11 +423,62 @@ DSTATUS disk_status(BYTE pdrv)
     return dstatus;
 }
 
+static UINT disk_read_imp(BYTE* buf, DWORD sector, UINT count)
+{
+    SDIO->ICR = SDIO_ICR_DATA_FLAGS;
+    SDIO->DLEN = 512 * count;
+    SDIO->DCTRL = SDIO_DCTRL_DBLOCKSIZE_0|SDIO_DCTRL_DBLOCKSIZE_3|
+                  SDIO_DCTRL_DTDIR|SDIO_DCTRL_DTEN;
+    __DSB();
+
+    // Send command to start data transfer
+    u8 cmd = (count > 1) ? 18 : 17;
+    u32 resp;
+    if (!sdio_cmd_send(cmd, sector, RESP_SHORT, &resp) || (resp & 0xc0580000))
+    {
+        return false;
+    }
+
+    u32 *buf32 = (u32 *)buf;
+
+    u32 sta;
+    do
+    {
+        sta = SDIO->STA;
+        if (sta & SDIO_STA_RXDAVL)
+        {
+            *buf32++ = SDIO->FIFO;
+        }
+    }
+    while (!(sta & (SDIO_STA_DATAEND|SDIO_STA_TRX_ERROR_FLAGS)));
+
+    u32 *buf32_end = (u32 *)(buf + 512 * count);
+
+    // Read data still in FIFO
+	while (SDIO->STA & SDIO_STA_RXDAVL && buf32 < buf32_end)
+    {
+        *buf32++ = SDIO->FIFO;
+	}
+
+    if (sta & SDIO_STA_TRX_ERROR_FLAGS)
+    {
+        wrn("%s SDIO_STA: %08x", __func__, sta);
+    }
+
+    // Stop multi block transfer
+    if (cmd == 18)
+    {
+        sdio_cmd_send(12, 0, RESP_SHORT, &resp);
+    }
+
+    return !(sta & SDIO_STA_TRX_ERROR_FLAGS);
+}
+
 DRESULT disk_read(BYTE pdrv, BYTE* buf, DWORD sector, UINT count)
 {
     led_toggle();
 
-    if (count < 1 || count > 127)
+    if (count < 1 || count > 128)
     {
         return RES_PARERR;
     }
@@ -434,68 +493,98 @@ DRESULT disk_read(BYTE pdrv, BYTE* buf, DWORD sector, UINT count)
         sector *= 512;
     }
 
-    if (!sdio_check_tran(500))
+    UINT result = false;
+    for (u32 retry=0; retry<10 && !result; retry++)
     {
-        return RES_ERROR;
+        if (!sdio_check_ready(500))
+        {
+            return RES_ERROR;
+        }
+
+        result = disk_read_imp(buf, sector, count);
     }
 
-    SDIO->DCTRL = SDIO_DCTRL_DBLOCKSIZE_0|SDIO_DCTRL_DBLOCKSIZE_3|SDIO_DCTRL_DTDIR;
-    SDIO->DTIMER = 24000000;
-    SDIO->DLEN = 512 * count;
+    return result ? RES_OK : RES_ERROR;
+}
 
-    int cmd = (count > 1) ? 18 : 17;
-    uint32_t resp;
-    if (!sdio_cmd_send(cmd, sector, RESP_SHORT, &resp) || (resp & 0xc0580000))
+static UINT disk_write_imp(const BYTE* buf, DWORD sector, UINT count)
+{
+    u32 resp;
+    u8 cmd;
+
+    if (count == 1) // Single block write
     {
-        return RES_ERROR;
+        cmd = 24;
     }
+    else // Multiple block write
+    {
+        cmd = (card_type & CT_SDC) ? ACMD(23) : 23;
+        if (!sdio_cmd_send(cmd, count, RESP_SHORT, &resp) || (resp & 0xC0580000))
+        {
+            return false;
+        }
 
-    uint32_t *buf32 = (uint32_t *)buf;
-    int rd = 0;
+        cmd = 25;
+    }
 
     SDIO->ICR = SDIO_ICR_DATA_FLAGS;
-    SDIO->DCTRL |= SDIO_DCTRL_DTEN;
+    SDIO->DLEN = 512 * count;
 
-    while (true)
+    const u32 *buf32 = (const u32 *)buf;
+    u32 first_word = *buf32++;
+    __DSB();
+
+    if (!sdio_cmd_send(cmd, sector, RESP_SHORT, &resp) || (resp & 0xC0580000))
     {
-        uint32_t sta = SDIO->STA;
-        if (sta & (SDIO_STA_DCRCFAIL|SDIO_STA_DTIMEOUT|SDIO_STA_RXOVERR|SDIO_STA_STBITERR))
-        {
-            err("%s SDIO_STA: %08x\n", __func__, sta);
-            break;
-        }
-
-        if (sta & SDIO_STA_RXDAVL)
-        {
-            *buf32++ = SDIO->FIFO;
-            rd += 4;
-
-            if (rd == 512 * count)
-            {
-                break;
-            }
-        }
+        err("%s %u", __func__, __LINE__);
+        return false;
     }
 
-    if (rd < 512 * count || cmd == 18)
-    {
-        // Empty FIFO buffer
-        while (SDIO->STA & SDIO_STA_RXDAVL)
-        {
-            (void)SDIO->FIFO;
-        }
+    // Note: Will not work while the C64 interrupt handler is enabled
+    __disable_irq();
+    SDIO->DCTRL = SDIO_DCTRL_DBLOCKSIZE_0|SDIO_DCTRL_DBLOCKSIZE_3|
+                  SDIO_DCTRL_DTEN;
 
+    // Send the first 8 words to avoid TX FIFO underrun
+    SDIO->FIFO = first_word;
+    for (u32 i=0; i<7; i++)
+    {
+        SDIO->FIFO = *buf32++;
+    }
+
+    const u32 *buf32_end = (u32 *)(buf + 512 * count);
+
+    u32 sta;
+    do
+    {
+        sta = SDIO->STA;
+        if (!(sta & SDIO_STA_TXFIFOF) && buf32 < buf32_end)
+        {
+            SDIO->FIFO = *buf32++;
+        }
+    }
+    while (!(sta & (SDIO_STA_DATAEND|SDIO_STA_TRX_ERROR_FLAGS)));
+    __enable_irq();
+
+    if (sta & SDIO_STA_TRX_ERROR_FLAGS)
+    {
+        wrn("%s SDIO_STA: %08x", __func__, sta);
+    }
+
+    // Stop multi block transfer
+    if (cmd == 25)
+    {
         sdio_cmd_send(12, 0, RESP_SHORT, &resp);
     }
 
-    return rd < 512 * count ? RES_ERROR : RES_OK;
+    return !(sta & SDIO_STA_TRX_ERROR_FLAGS);
 }
 
 DRESULT disk_write(BYTE pdrv, const BYTE* buf, DWORD sector, UINT count)
 {
     led_toggle();
 
-    if (count < 1 || count > 127)
+    if (count < 1 || count > 128)
     {
         return RES_PARERR;
     }
@@ -512,93 +601,24 @@ DRESULT disk_write(BYTE pdrv, const BYTE* buf, DWORD sector, UINT count)
         sector *= 512;
     }
 
-    if (!sdio_check_tran(500))
+    if (c64_interface_active())
     {
+        err("%s C64 interface active", __func__);
         return RES_ERROR;
     }
 
-    uint32_t resp;
-    int cmd;
-
-    if (count == 1) // Single block write
+    UINT result = false;
+    for (u32 retry=0; retry<3 && !result; retry++)
     {
-        cmd = 24;
-    }
-    else // Multiple block write
-    {
-        cmd = (card_type & CT_SDC) ? ACMD(23) : 23;
-        if (!sdio_cmd_send(cmd, count, RESP_SHORT, &resp) || (resp & 0xC0580000))
+        if (!sdio_check_ready(500))
         {
             return RES_ERROR;
         }
 
-        cmd = 25;
+        result = disk_write_imp(buf, sector, count);
     }
 
-    SDIO->DCTRL = SDIO_DCTRL_DBLOCKSIZE_0|SDIO_DCTRL_DBLOCKSIZE_3;
-    SDIO->DTIMER = 24000000;
-    SDIO->DLEN = 512 * count;
-
-    if (!sdio_cmd_send(cmd, sector, RESP_SHORT, &resp) || (resp & 0xC0580000))
-    {
-        err("%s %d\n", __func__, __LINE__);
-        return RES_ERROR;
-    }
-
-    const uint32_t *buf32 = (const uint32_t *)buf;
-    int wr = 0;
-
-    SDIO->ICR = SDIO_ICR_DATA_FLAGS;
-
-    // Note: Will not work while the C64 interrupt handler is enabled
-    __disable_irq();
-    uint32_t first_word = *buf32++;
-    __DSB();
-    SDIO->DCTRL |= SDIO_DCTRL_DTEN;
-
-    // Send the first 8 words to avoid TX FIFO underrun
-    SDIO->FIFO = first_word;
-    for (int i=0; i<7; i++)
-    {
-        SDIO->FIFO = *buf32++;
-    }
-    wr += 4*8;
-
-    while (true)
-    {
-        uint32_t sta = SDIO->STA;
-        if (sta & (SDIO_STA_DCRCFAIL|SDIO_STA_DTIMEOUT|SDIO_STA_TXUNDERR|SDIO_STA_STBITERR))
-        {
-            err("%s SDIO_STA: %08x\n", __func__, sta);
-            break;
-        }
-
-        if (sta & SDIO_STA_TXFIFOF)
-        {
-            continue;
-        }
-
-        if (wr < 512 * count)
-        {
-            SDIO->FIFO = *buf32++;
-            wr += 4;
-            continue;
-        }
-
-        // Wait until all data has been sent
-        if ((sta & (SDIO_STA_TXACT|SDIO_STA_DATAEND)) == SDIO_STA_DATAEND)
-        {
-            break;
-        }
-    }
-    __enable_irq();
-
-    if (wr < 512 * count || (cmd == 25 && (card_type & CT_SDC)))
-    {
-        sdio_cmd_send(12, 0, RESP_SHORT, &resp);
-    }
-
-    return wr < 512 * count ? RES_ERROR : RES_OK;
+    return result ? RES_OK : RES_ERROR;
 }
 
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff)

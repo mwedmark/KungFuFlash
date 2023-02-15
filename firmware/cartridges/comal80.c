@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -21,7 +21,7 @@
 /*************************************************
 * C64 bus write callback
 *************************************************/
-static inline void comal80_write_handler(uint8_t control, uint16_t addr, uint8_t data)
+FORCE_INLINE void comal80_write_handler(u32 control, u32 addr, u32 data)
 {
     /* The register is reset to $00 on reset. Bits:
         7   Unused
@@ -38,18 +38,18 @@ static inline void comal80_write_handler(uint8_t control, uint16_t addr, uint8_t
 
         if (data & 0x40)
         {
-            c64_crt_control(STATUS_LED_OFF|CRT_PORT_NONE);
+            C64_CRT_CONTROL(STATUS_LED_OFF|CRT_PORT_NONE);
         }
         else
         {
-            c64_crt_control(STATUS_LED_ON|CRT_PORT_16K);
+            C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_16K);
         }
     }
 }
 
 static void comal80_init(void)
 {
-    c64_crt_control(STATUS_LED_ON|CRT_PORT_16K);
+    C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_16K);
 }
 
 C64_BUS_HANDLER_READ(comal80, crt_read_handler)

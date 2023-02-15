@@ -1,5 +1,5 @@
 ifndef version
-version := 1.xx
+version := 1.XX
 endif
 export version
 
@@ -17,7 +17,7 @@ LAUNCHER = $(LAUNCHER_DIR)build/KungFuLauncher_v$(version).bin
 # debug build?
 DEBUG = 0 #1
 # optimization
-OPT = -O2 #-Og
+OPT = -Os #-Og
 
 #######################################
 # paths
@@ -81,7 +81,8 @@ AS_DEFS =
 
 # C defines
 C_DEFS =  \
--DSTM32F405xx
+-DSTM32F405xx \
+-DVERSION=\"${version}\"
 
 # AS includes
 AS_INCLUDES =
@@ -116,11 +117,11 @@ LDSCRIPT = stm32f4xx/STM32F405RGTx_FLASH.ld
 # libraries
 LIBS = -lc -lm -lnosys
 LIBDIR =
-LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections
+LDFLAGS_COMMON = $(MCU) -specs=nano.specs $(LIBDIR) $(LIBS) -Wl,--gc-sections
+LDFLAGS = $(LDFLAGS_COMMON) -T$(LDSCRIPT) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref
 
 # default action: build all
-all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/$(TARGET).upd
-
+all: $(BUILD_DIR)/$(TARGET).upd
 
 #######################################
 # build the application
@@ -136,29 +137,27 @@ $(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR)
 	$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
 
 $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
-	$(AS) -c $(CFLAGS) $< -o $@
+	$(AS) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.s=.lst)) $< -o $@
 
 $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile
 	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
 	$(SZ) $@
 
-$(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
-	$(HEX) $< $@
-
-$(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
-	$(BIN) $< $@
-
-$(BUILD_DIR)/%.upd: $(BUILD_DIR)/%.elf $(LAUNCHER) | $(BUILD_DIR)
+$(BUILD_DIR)/$(TARGET).bin: $(BUILD_DIR)/$(TARGET).elf | $(BUILD_DIR)
 	$(BIN) --gap-fill 0xff --pad-to 0xc000 $< $@
-	cat $(LAUNCHER) >> $@
+
+$(BUILD_DIR)/$(TARGET)_mem.bin: $(BUILD_DIR)/$(TARGET).bin | $(BUILD_DIR)
+	@cat $(BUILD_DIR)/$(TARGET).bin > $@
+
+$(BUILD_DIR)/$(TARGET).upd: $(BUILD_DIR)/$(TARGET).bin $(LAUNCHER) | $(BUILD_DIR)
+	@cat $(BUILD_DIR)/$(TARGET).bin > $@
+	@cat $(LAUNCHER) >> $@
 
 $(BUILD_DIR):
-	mkdir $@
+	mkdir -p $@
 
-$(LAUNCHER):
+$(LAUNCHER): $(wildcard $(LAUNCHER_DIR)*)
 	$(MAKE) -C $(LAUNCHER_DIR)
-
-.PHONY: $(LAUNCHER)
 
 #######################################
 # Debug
@@ -171,7 +170,10 @@ debug: all
 #######################################
 burn: all
 	@st-flash write $(BUILD_DIR)/$(TARGET).bin 0x8000000
-	#dfu-util -a 0 -s 0x08000000 -D $(BUILD_DIR)/$(TARGET).bin
+	@#dfu-util -a 0 -s 0x08000000 -D $(BUILD_DIR)/$(TARGET).bin
+
+mem: $(BUILD_DIR)/$(TARGET)_mem.bin
+	@st-flash write $< 0x20000000
 
 #######################################
 # clean up

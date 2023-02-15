@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -18,7 +18,13 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-static uint8_t settings_flags;
+static u8 settings_flags;
+
+static u8 settings_refresh(OPTIONS_ELEMENT *element, const char *text)
+{
+    options_element_text(element, text);
+    return menu->dir(menu->state);  // Refresh settings
+}
 
 static const char * settings_basic_text(void)
 {
@@ -28,7 +34,7 @@ static const char * settings_basic_text(void)
     return scratch_buf;
 }
 
-static bool settings_basic_change(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, uint8_t flags)
+static u8 settings_basic_change(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, u8 flags)
 {
     if (settings_flags & DAT_FLAG_PERSIST_BASIC)
     {
@@ -39,31 +45,65 @@ static bool settings_basic_change(OPTIONS_STATE *state, OPTIONS_ELEMENT *element
         settings_flags |= DAT_FLAG_PERSIST_BASIC;
     }
 
-    options_element_text(element, settings_basic_text());
-    menu_state->dir(menu_state); // Refresh settings
-    return false;
+    return settings_refresh(element, settings_basic_text());
 }
 
-static bool settings_save(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, uint8_t flags)
+static const char * settings_autostart_text(void)
+{
+    sprint(scratch_buf, "Autostart disk image: %s",
+           (settings_flags & DAT_FLAG_AUTOSTART_D64) ? "yes" : "no");
+
+    return scratch_buf;
+}
+
+static u8 settings_autostart_change(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, u8 flags)
+{
+    if (settings_flags & DAT_FLAG_AUTOSTART_D64)
+    {
+        settings_flags &= ~DAT_FLAG_AUTOSTART_D64;
+    }
+    else
+    {
+        settings_flags |= DAT_FLAG_AUTOSTART_D64;
+    }
+
+    return settings_refresh(element, settings_autostart_text());
+}
+
+static const char * settings_device_text(void)
+{
+    sprint(scratch_buf, "Disk device number: %u", get_device_number(settings_flags));
+    return scratch_buf;
+}
+
+static u8 settings_device_change(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, u8 flags)
+{
+    u8 device = get_device_number(settings_flags) + 1;
+    set_device_number(&settings_flags, device);
+
+    return settings_refresh(element, settings_device_text());
+}
+
+static u8 settings_save(OPTIONS_STATE *state, OPTIONS_ELEMENT *element, u8 flags)
 {
     dat_file.flags = settings_flags;
 
-    c64_send_exit_menu();
-    c64_send_prg_message("Saving settings.");
-    c64_interface(false);
+    sd_send_prg_message("Saving settings.");
     save_dat();
     restart_to_menu();
 
-    return false;
+    return CMD_NONE;
 }
 
-static void handle_settings(void)
+static u8 handle_settings(void)
 {
     settings_flags = dat_file.flags;
 
     OPTIONS_STATE *options = options_init("Settings");
     options_add_text_element(options, settings_basic_change, settings_basic_text());
+    options_add_text_element(options, settings_autostart_change, settings_autostart_text());
+    options_add_text_element(options, settings_device_change, settings_device_text());
     options_add_text_element(options, settings_save, "Save");
     options_add_dir(options, "Cancel");
-    handle_options(options);
+    return handle_options();
 }

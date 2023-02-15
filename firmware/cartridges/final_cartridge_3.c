@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,7 +17,8 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
-static uint32_t const fc3_mode[8] =
+
+static u32 const fc3_mode[8] =
 {
     STATUS_LED_ON|CRT_PORT_16K,
     STATUS_LED_ON|CRT_PORT_ULTIMAX,
@@ -32,16 +33,16 @@ static uint32_t const fc3_mode[8] =
 
 #define FC3_REGISTER_ADDR (0xdfff)
 #define FC3_REGISTER_HIDE (0)
-static uint16_t fc3_register;
+static u32 fc3_register;
 
 /*************************************************
 * C64 bus read callback (VIC-II cycle)
 *************************************************/
-static inline bool fc3_vic_read_handler(uint8_t control, uint16_t addr)
+FORCE_INLINE bool fc3_vic_read_handler(u32 control, u32 addr)
 {
     if ((control & (C64_IO1|C64_IO2|C64_ROML|C64_ROMH)) != (C64_IO1|C64_IO2|C64_ROML|C64_ROMH))
     {
-        c64_data_write(crt_ptr[addr & 0x3fff]);
+        C64_DATA_WRITE(crt_ptr[addr & 0x3fff]);
         return true;
     }
 
@@ -51,17 +52,17 @@ static inline bool fc3_vic_read_handler(uint8_t control, uint16_t addr)
 /*************************************************
 * C64 bus read callback (CPU cycle)
 *************************************************/
-static inline bool fc3_read_handler(uint8_t control, uint16_t addr)
+FORCE_INLINE bool fc3_read_handler(u32 control, u32 addr)
 {
     if ((control & (C64_IO1|C64_IO2|C64_ROML|C64_ROMH)) != (C64_IO1|C64_IO2|C64_ROML|C64_ROMH))
     {
-        c64_data_write(crt_ptr[addr & 0x3fff]);
+        C64_DATA_WRITE(crt_ptr[addr & 0x3fff]);
         return true;
     }
 
     if (control & SPECIAL_BTN)
     {
-        c64_irq_nmi(C64_NMI_LOW);
+        C64_IRQ_NMI(C64_NMI_LOW);
         freezer_state = FREEZE_START;
     }
     else if (freezer_state)
@@ -75,12 +76,12 @@ static inline bool fc3_read_handler(uint8_t control, uint16_t addr)
 /*************************************************
 * C64 bus write callback (early)
 *************************************************/
-static inline void fc3_early_write_handler(void)
+FORCE_INLINE void fc3_early_write_handler(void)
 {
     // Use 3 consecutive writes to detect NMI
     if (freezer_state && ++freezer_state == FREEZE_3_WRITES)
     {
-        c64_crt_control(STATUS_LED_ON|C64_GAME_LOW);
+        C64_CRT_CONTROL(STATUS_LED_ON|C64_GAME_LOW);
         freezer_state = FREEZE_RESET;
         fc3_register = FC3_REGISTER_ADDR;
     }
@@ -89,7 +90,7 @@ static inline void fc3_early_write_handler(void)
 /*************************************************
 * C64 bus write callback
 *************************************************/
-static inline void fc3_write_handler(uint8_t control, uint16_t addr, uint8_t data)
+FORCE_INLINE void fc3_write_handler(u32 control, u32 addr, u32 data)
 {
     /*  The FC3 register is reset to $00 on reset.
         Bit 7: Hide register, 1 = disable write to register
@@ -107,15 +108,15 @@ static inline void fc3_write_handler(uint8_t control, uint16_t addr, uint8_t dat
 
         if (data & 0x40)
         {
-            c64_irq_nmi(C64_NMI_HIGH);
+            C64_IRQ_NMI(C64_NMI_HIGH);
         }
         else
         {
-            c64_irq_nmi(C64_NMI_LOW);
+            C64_IRQ_NMI(C64_NMI_LOW);
         }
 
-        uint32_t mode = fc3_mode[((data >> 5) & 0x04) | ((data >> 4) & 0x03)];
-        c64_crt_control(mode);
+        u32 mode = fc3_mode[((data >> 5) & 0x04) | ((data >> 4) & 0x03)];
+        C64_CRT_CONTROL(mode);
         if (mode & STATUS_LED_OFF)
         {
             fc3_register = FC3_REGISTER_HIDE;
@@ -127,8 +128,8 @@ static inline void fc3_write_handler(uint8_t control, uint16_t addr, uint8_t dat
 
 static void fc3_init(void)
 {
-    c64_crt_control(STATUS_LED_ON|CRT_PORT_16K);
-    c64_irq_nmi(C64_NMI_LOW);
+    C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_16K);
+    C64_IRQ_NMI(C64_NMI_LOW);
     fc3_register = FC3_REGISTER_ADDR;
 }
 

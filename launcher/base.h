@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -29,11 +29,23 @@
  *
  * Newer versions might be available here: http://www.sascha-bader.de/html/code.html
  */
+
 #ifndef BASE_H
 #define BASE_H
 
 #define JOY_MASK (JOY_UP_MASK|JOY_DOWN_MASK|JOY_LEFT_MASK|JOY_RIGHT_MASK|JOY_BTN_1_MASK)
 
-uint8_t waitKey(void);
+#define CH_NONE 0
+#define CH_SHIFT_ENTER  (0x80|CH_ENTER)
+#define CH_CLR          (0x80|CH_HOME)
+
+#define CH_FIRE_UP      (0xa6)  // CBM and +
+#define CH_FIRE_DOWN    (0xdc)  // CBM and -
+#define CH_FIRE_LEFT    (0xdb)  // SHIFT and +
+#define CH_FIRE_RIGHT   (0xdd)  // SHIFT and -
+
+uint8_t getJoy(void);
+void waitKey(void);
+void waitRelease(void);
 
 #endif

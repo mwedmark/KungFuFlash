@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,12 +17,15 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
-#define DAT_FILENAME "/KungFuFlash.dat"
-#define FW_NAME_SIZE 20
 
-#define CRT_SIGNATURE "C64 CARTRIDGE   "
+#define DAT_FILENAME "/KungFuFlash.dat"
+#define UPD_FILENAME ("/KungFuFlash_v" VERSION ".upd")
+
+#define CRT_C64_SIGNATURE  "C64 CARTRIDGE   "
+#define CRT_C128_SIGNATURE "C128 CARTRIDGE  "
 #define CRT_CHIP_SIGNATURE "CHIP"
-#define CRT_VERSION 0x100
+#define CRT_VERSION_1_0 0x100
+#define CRT_VERSION_2_0 0x200
 
 #define EAPI_OFFSET 0x3800
 #define EAPI_SIZE   0x300
@@ -84,12 +87,12 @@ static bool sid_load_file(FIL *file)
 static bool p00_load_file(FIL *file)
 {
     P00_HEADER header;
-    uint16_t len = file_read(file, &header, sizeof(P00_HEADER));
+    u16 len = file_read(file, &header, sizeof(P00_HEADER));
 
     if (len != sizeof(P00_HEADER) ||
         memcmp("C64File", header.signature, sizeof(header.signature)) != 0)
     {
-        wrn("Unsupported P00 header\n");
+        wrn("Unsupported P00 header");
         return false;
     }
 
@@ -101,6 +104,14 @@ static bool p00_load_file(FIL *file)
     }
 
     return false;
+}
+
+static u16 rom_load_file(FIL *file)
+{
+    memset(dat_buffer, 0xff, sizeof(dat_buffer));
+
+    u16 len = file_read(file, dat_buffer, sizeof(dat_buffer));
+    return len;
 }
 
 
@@ -161,54 +172,67 @@ static bool sid_load_header(FIL *file, SID_HEADER *header)
 
 static bool crt_load_header(FIL *file, CRT_HEADER *header)
 {
-    uint32_t len = file_read(file, header, sizeof(CRT_HEADER));
+    u32 len = file_read(file, header, sizeof(CRT_HEADER));
 
-    if (len != sizeof(CRT_HEADER) ||
-        memcmp(CRT_SIGNATURE, header->signature, sizeof(header->signature)) != 0)
+    if (len != sizeof(CRT_HEADER))
     {
-        wrn("Unsupported CRT header\n");
+        wrn("Unsupported CRT header");
+        return false;
+    }
+
+    u16 crt_type_flag = 0;
+    if (memcmp(CRT_C128_SIGNATURE, header->signature,
+               sizeof(header->signature)) == 0)
+    {
+        crt_type_flag = CRT_C128_CARTRIDGE;
+    }
+    else if (memcmp(CRT_C64_SIGNATURE, header->signature,
+                    sizeof(header->signature)) != 0)
+    {
+        wrn("Unsupported CRT signature");
         return false;
     }
 
     header->header_length = __REV(header->header_length);
     header->version = __REV16(header->version);
-    header->cartridge_type = __REV16(header->cartridge_type);
+    header->cartridge_type = __REV16(header->cartridge_type) | crt_type_flag;
 
     if (header->header_length != sizeof(CRT_HEADER))
     {
         if (header->header_length != 0x20)
         {
-            wrn("Unsupported CRT header length: %u\n", header->header_length);
+            wrn("Unsupported CRT header length: %u", header->header_length);
             return false;
         }
         else
         {
-            log("Ignoring non-standard CRT header length: %u\n",
+            log("Ignoring non-standard CRT header length: %u",
                 header->header_length);
         }
     }
 
-    if (header->version != CRT_VERSION)
+    if (header->version < CRT_VERSION_1_0 || header->version > CRT_VERSION_2_0)
     {
-        wrn("Unsupported CRT version: %x\n", header->version);
+        wrn("Unsupported CRT version: %x", header->version);
         return false;
     }
 
     return true;
 }
 
-static bool crt_write_header(FIL *file, uint16_t type, uint8_t exrom, uint8_t game, const char *name)
+static bool crt_write_header(FIL *file, u16 type, u8 exrom, u8 game, const char *name)
 {
     CRT_HEADER header;
-    memcpy(header.signature, CRT_SIGNATURE, sizeof(header.signature));
+    memcpy(header.signature, CRT_C64_SIGNATURE, sizeof(header.signature));
     header.header_length = __REV(sizeof(CRT_HEADER));
-    header.version = __REV16(CRT_VERSION);
+    header.version = __REV16(CRT_VERSION_1_0);
     header.cartridge_type = __REV16(type);
     header.exrom = exrom;
     header.game = game;
+    header.hardware_revision = 0;
     memset(header.reserved, 0, sizeof(header.reserved));
 
-    for (uint8_t i=0; i<sizeof(header.cartridge_name); i++)
+    for (u8 i=0; i<sizeof(header.cartridge_name); i++)
     {
         char c = *name;
         if (c)
@@ -219,13 +243,13 @@ static bool crt_write_header(FIL *file, uint16_t type, uint8_t exrom, uint8_t ga
         header.cartridge_name[i] = c;
     }
 
-    uint32_t len = file_write(file, &header, sizeof(CRT_HEADER));
+    u32 len = file_write(file, &header, sizeof(CRT_HEADER));
     return len == sizeof(CRT_HEADER);
 }
 
 static bool crt_load_chip_header(FIL *file, CRT_CHIP_HEADER *header)
 {
-    uint32_t len = file_read(file, header, sizeof(CRT_CHIP_HEADER));
+    u32 len = file_read(file, header, sizeof(CRT_CHIP_HEADER));
 
     if (len != sizeof(CRT_CHIP_HEADER) ||
         memcmp(CRT_CHIP_SIGNATURE, header->signature, sizeof(header->signature)) != 0)
@@ -248,7 +272,7 @@ static bool crt_load_chip_header(FIL *file, CRT_CHIP_HEADER *header)
     return true;
 }
 
-static bool crt_write_chip_header(FIL *file, uint8_t type, uint8_t bank, uint16_t address, uint16_t size)
+static bool crt_write_chip_header(FIL *file, u8 type, u8 bank, u16 address, u16 size)
 {
     CRT_CHIP_HEADER header;
     memcpy(header.signature, CRT_CHIP_SIGNATURE, sizeof(header.signature));
@@ -258,28 +282,39 @@ static bool crt_write_chip_header(FIL *file, uint8_t type, uint8_t bank, uint16_
     header.start_address = __REV16(address);
     header.image_size = __REV16(size);
 
-    uint32_t len = file_write(file, &header, sizeof(CRT_CHIP_HEADER));
+    u32 len = file_write(file, &header, sizeof(CRT_CHIP_HEADER));
     return len == sizeof(CRT_CHIP_HEADER);
 }
 
-static int32_t crt_get_offset(CRT_CHIP_HEADER *header, uint16_t cartridge_type)
+static s32 crt_get_offset(CRT_CHIP_HEADER *header, u16 cartridge_type)
 {
-    int32_t offset = -1;
+    s32 offset = -1;
 
     // ROML bank (and ROMH for >8k images)
     if (header->start_address == 0x8000 && header->image_size <= 16*1024)
     {
-        if (header->bank < 64)
-        {
-            offset = header->bank * 16*1024;
-        }
         // Suport ROML only cartridges with more than 64 banks
-        else if(header->image_size <= 8*1024 &&
-                cartridge_type == CRT_MAGIC_DESK_DOMARK_HES_AUSTRALIA)
+        if (header->image_size <= 8*1024 &&
+            (cartridge_type == CRT_FUN_PLAY_POWER_PLAY ||
+             cartridge_type == CRT_MAGIC_DESK_DOMARK_HES_AUSTRALIA))
         {
-            // Use ROMH bank location for upper banks
-            header->bank -= 64;
-            offset = header->bank * 16*1024 + 8*1024;
+            bool odd_bank = header->bank & 1;
+            header->bank >>= 1;
+            offset = header->bank * 16*1024;
+
+            // Use ROMH bank location for odd banks
+            if (odd_bank)
+            {
+                offset += 8*1024;
+            }
+        }
+        else
+        {
+            if (cartridge_type & CRT_C128_CARTRIDGE)
+            {
+                header->bank *= 2;
+            }
+            offset = header->bank * 16*1024;
         }
     }
     // ROMH bank
@@ -287,6 +322,12 @@ static int32_t crt_get_offset(CRT_CHIP_HEADER *header, uint16_t cartridge_type)
               header->image_size <= 8*1024)
     {
         offset = header->bank * 16*1024 + 8*1024;
+    }
+    // ROMH bank (C128)
+    else if (header->start_address == 0xc000 && header->image_size <= 16*1024)
+    {
+        header->bank = (header->bank * 2) + 1;
+        offset = header->bank * 16*1024;
     }
     // ROMH bank (4k Ultimax)
     else if (header->start_address == 0xf000 && header->image_size == 4*1024)
@@ -297,10 +338,10 @@ static int32_t crt_get_offset(CRT_CHIP_HEADER *header, uint16_t cartridge_type)
     return offset;
 }
 
-static uint8_t crt_program_file(FIL *crt_file, uint16_t cartridge_type)
+static u8 crt_program_file(FIL *crt_file, u16 cartridge_type)
 {
-    uint8_t *flash_buffer = (uint8_t *)FLASH_BASE;
-    uint8_t banks_in_use = 0;
+    u8 *flash_buffer = (u8 *)FLASH_BASE;
+    u8 banks_in_use = 0;
     bool sector_erased[8] = {0};
 
     memset(dat_buffer, 0xff, sizeof(dat_buffer));
@@ -308,29 +349,29 @@ static uint8_t crt_program_file(FIL *crt_file, uint16_t cartridge_type)
     while (!f_eof(crt_file))
     {
         CRT_CHIP_HEADER header;
-        if(!crt_load_chip_header(crt_file, &header))
+        if (!crt_load_chip_header(crt_file, &header))
         {
-            err("Failed to read CRT chip header\n");
+            err("Failed to read CRT chip header");
             banks_in_use = 0;
             break;
         }
 
-        int32_t offset = crt_get_offset(&header, cartridge_type);
+        s32 offset = crt_get_offset(&header, cartridge_type);
         if (offset == -1)
         {
-            wrn("Unsupported CRT chip bank %u at $%x. Size %u\n",
+            wrn("Unsupported CRT chip bank %u at $%x. Size %u",
                 header.bank, header.start_address, header.image_size);
             banks_in_use = 0;
             break;
         }
 
         // Place image in KungFuFlash.dat file or flash?
-        uint8_t *read_buf = header.bank < 4 ? dat_buffer + offset :
-                            (uint8_t *)scratch_buf;
+        u8 *read_buf = header.bank < 4 ? dat_buffer + offset :
+                       (u8 *)scratch_buf;
 
         if (file_read(crt_file, read_buf, header.image_size) != header.image_size)
         {
-            err("Failed to read CRT chip image. Bank %u at $%x\n",
+            err("Failed to read CRT chip image. Bank %u at $%x",
                 header.bank, header.start_address);
             banks_in_use = 0;
             break;
@@ -339,10 +380,10 @@ static uint8_t crt_program_file(FIL *crt_file, uint16_t cartridge_type)
         // Place image in flash
         if (header.bank >= 4 && header.bank < 64)
         {
-            uint8_t *flash_ptr = flash_buffer + offset;
-            int8_t sector_to_erase = -1;
+            u8 *flash_ptr = flash_buffer + offset;
+            s8 sector_to_erase = -1;
 
-            uint8_t sector = header.bank / 8;
+            u8 sector = header.bank / 8;
             if (!sector_erased[sector])
             {
                 sector_erased[sector] = true;
@@ -356,7 +397,7 @@ static uint8_t crt_program_file(FIL *crt_file, uint16_t cartridge_type)
         // Skip image
         else if (header.bank >= 64)
         {
-            wrn("No room for CRT chip bank %u at $%x\n",
+            wrn("No room for CRT chip bank %u at $%x",
                 header.bank, header.start_address);
             continue;
         }
@@ -368,11 +409,11 @@ static uint8_t crt_program_file(FIL *crt_file, uint16_t cartridge_type)
     }
 
     // Erase any gaps to minimize generated CRT file
-    for (uint8_t sector=0; sector<banks_in_use/8; sector++)
+    for (u8 sector=0; sector<banks_in_use/8; sector++)
     {
         if (!sector_erased[sector])
         {
-            uint8_t sector_to_erase = sector + 4;
+            u8 sector_to_erase = sector + 4;
             led_toggle();
             flash_sector_program(sector_to_erase, 0, 0, 0);
         }
@@ -382,7 +423,7 @@ static uint8_t crt_program_file(FIL *crt_file, uint16_t cartridge_type)
     return banks_in_use;
 }
 
-static bool crt_write_chip(FIL *file, uint8_t bank, uint16_t address, uint16_t size, void *buf)
+static bool crt_write_chip(FIL *file, u8 bank, u16 address, u16 size, void *buf)
 {
     if (!crt_write_chip_header(file, CRT_CHIP_FLASH, bank, address, size))
     {
@@ -392,10 +433,10 @@ static bool crt_write_chip(FIL *file, uint8_t bank, uint16_t address, uint16_t s
     return file_write(file, buf, size) == size;
 }
 
-static bool crt_bank_empty(uint8_t *buf, uint16_t size)
+static bool crt_bank_empty(u8 *buf, u16 size)
 {
-    uint32_t *buf32 = (uint32_t *)buf;
-    for (uint16_t i=0; i<size/4; i++)
+    u32 *buf32 = (u32 *)buf;
+    for (u16 i=0; i<size/4; i++)
     {
         if (buf32[i] != 0xffffffff)
         {
@@ -406,19 +447,19 @@ static bool crt_bank_empty(uint8_t *buf, uint16_t size)
     return true;
 }
 
-static bool crt_write_file(FIL *crt_file, uint8_t banks)
+static bool crt_write_file(FIL *crt_file, u8 banks)
 {
-    const uint16_t chip_size = 8*1024;
-    for (uint8_t bank=0; bank<banks; bank++)
+    const u16 chip_size = 8*1024;
+    for (u8 bank=0; bank<banks; bank++)
     {
-        uint8_t *buf;
+        u8 *buf;
         if (bank < 4)
         {
             buf = dat_buffer + (16*1024 * bank);
         }
         else
         {
-            buf = (uint8_t *)FLASH_BASE + (16*1024 * bank);
+            buf = (u8 *)FLASH_BASE + (16*1024 * bank);
         }
 
         if (!crt_bank_empty(buf, chip_size) &&
@@ -437,12 +478,12 @@ static bool crt_write_file(FIL *crt_file, uint8_t banks)
     return true;
 }
 
-static uint32_t crt_calc_flash_crc(uint8_t crt_banks)
+static u32 crt_calc_flash_crc(u8 crt_banks)
 {
     crc_reset();
     if (crt_banks > 4)
     {
-        uint8_t *flash_buffer = (uint8_t *)FLASH_BASE + 16*1024 * 4;
+        u8 *flash_buffer = (u8 *)FLASH_BASE + 16*1024 * 4;
         size_t flash_used = (crt_banks-4) * 16*1024;
         crc_calc(flash_buffer, flash_used);
     }
@@ -450,30 +491,24 @@ static uint32_t crt_calc_flash_crc(uint8_t crt_banks)
     return crc_get();
 }
 
-static void basic_load(const char *filename)
-{
-    // BASIC commands to run at start-up
-    sprint((char *)dat_buffer, "LOAD\"%s\",8,1%cRUN%c", filename, 0, 0);
-}
-
-static void basic_no_commands(void)
-{
-    // No BASIC commands at start-up
-    sprint((char *)dat_buffer, "%c", 0);
-}
-
 static bool upd_load(FIL *file, char *firmware_name)
 {
-    uint32_t len = file_read(file, dat_buffer, sizeof(dat_buffer));
-    dbg("Loaded UPD size: %u\n", len);
+    u32 len = file_read(file, dat_buffer, sizeof(dat_buffer));
+    dbg("Loaded UPD size: %u", len);
 
     if (len == sizeof(dat_buffer))
     {
-        const uint8_t *firmware_ver = &dat_buffer[48*1024];
+        const u8 *firmware_ver = &dat_buffer[FIRMWARE_SIZE];
         convert_to_ascii(firmware_name, firmware_ver, FW_NAME_SIZE);
 
         if (memcmp(firmware_name, "Kung Fu Flash", 13) == 0)
         {
+            // Don't allow downgrade to a PAL only version on a NTSC C64
+            if (c64_is_ntsc() && memcmp(&firmware_name[13], " v1.", 4) == 0 &&
+                (firmware_name[17] == '0' || firmware_name[17] == '1'))
+            {
+                return false;
+            }
             return true;
         }
     }
@@ -483,11 +518,11 @@ static bool upd_load(FIL *file, char *firmware_name)
 
 static void upd_program(void)
 {
-    for (int8_t sector=0; sector<4; sector++)
+    for (s8 sector=0; sector<4; sector++)
     {
         led_toggle();
-        uint32_t offset = 16*1024 * sector;
-        flash_sector_program(sector, (uint8_t *)FLASH_BASE + offset,
+        u32 offset = 16*1024 * sector;
+        flash_sector_program(sector, (u8 *)FLASH_BASE + offset,
                              dat_buffer + offset, 16*1024);
     }
 }
@@ -499,7 +534,7 @@ static bool mount_sd_card(void)
         return false;
     }
 
-    log("SD Card successfully mounted\n");
+    log("SD Card successfully mounted");
     return dir_change("/");
 }
 
@@ -512,7 +547,7 @@ static bool load_dat(void)
         file_read(&file, dat_buffer, sizeof(dat_buffer)) != sizeof(dat_buffer) ||
         memcmp(DAT_SIGNATURE, dat_file.signature, sizeof(dat_file.signature)) != 0)
     {
-        wrn(DAT_FILENAME " file not found or invalid\n");
+        wrn(DAT_FILENAME " file not found or invalid");
         memset(&dat_file, 0, sizeof(dat_file));
         memcpy(dat_file.signature, DAT_SIGNATURE, sizeof(dat_file.signature));
         result = false;
@@ -524,25 +559,46 @@ static bool load_dat(void)
 
 static bool auto_boot(void)
 {
+    bool result = false;
+
     load_dat();
-    if (menu_signature() || menu_button())
+    if (menu_signature() || menu_button_pressed())
     {
-        menu_button_wait_release();
         invalidate_menu_signature();
-        return false;
+
+        u32 i = 0;
+        while (menu_button_pressed())
+        {
+            // Menu button long press will start diagnostic
+            if (++i > 100)
+            {
+                dat_file.boot_type = DAT_DIAG;
+                result = true;
+                break;
+            }
+        }
+    }
+    else
+    {
+        result = true;
     }
 
-    return true;
+    if (dat_file.boot_type != DAT_DIAG)
+    {
+        menu_button_enable();
+    }
+
+    return result;
 }
 
 static bool save_dat(void)
 {
-    dbg("Saving " DAT_FILENAME " file\n");
+    dbg("Saving " DAT_FILENAME " file");
 
     FIL file;
     if (!file_open(&file, DAT_FILENAME, FA_WRITE|FA_CREATE_ALWAYS))
     {
-        wrn("Could not open " DAT_FILENAME " for writing\n");
+        wrn("Could not open " DAT_FILENAME " for writing");
         return false;
     }
 
@@ -555,6 +611,84 @@ static bool save_dat(void)
 
     file_close(&file);
     return file_saved;
+}
+
+static inline bool persist_basic_selection(void)
+{
+    return (dat_file.flags & DAT_FLAG_PERSIST_BASIC) != 0;
+}
+
+static inline bool autostart_d64(void)
+{
+    return (dat_file.flags & DAT_FLAG_AUTOSTART_D64) != 0;
+}
+
+static u8 get_device_number(u8 flags)
+{
+    u8 offset = flags & DAT_FLAG_DEVICE_D64_MSK;
+    return (offset >> DAT_FLAG_DEVICE_D64_POS) + 8;
+}
+
+static void set_device_number(u8 *flags, u8 device)
+{
+    u8 offset = ((device - 8) << DAT_FLAG_DEVICE_D64_POS) &
+                DAT_FLAG_DEVICE_D64_MSK;
+
+    MODIFY_REG(*flags, DAT_FLAG_DEVICE_D64_MSK, offset);
+}
+
+static inline u8 device_number_d64(void)
+{
+    return get_device_number(dat_file.flags);
+}
+
+static char * basic_get_filename(FILINFO *file_info)
+{
+    char *filename = file_info->fname;
+    bool comma_found = false;
+
+    size_t len;
+    for (len=0; len<=16 && filename[len]; len++)
+    {
+        char c = ff_wtoupper(filename[len]);
+        filename[len] = c;
+
+        if (c == ',')
+        {
+            comma_found = true;
+        }
+    }
+
+    if ((len > 16 || comma_found) && file_info->altname[0])
+    {
+        filename = file_info->altname;
+    }
+
+    return filename;
+}
+
+static void basic_load(const char *filename)
+{
+    u8 device = device_number_d64();
+
+    // BASIC commands to run at start-up
+    sprint((char *)dat_buffer, "%cLOAD\"%s\",%u,1%cRUN\r%c", device,
+           filename, device, 0, 0);
+}
+
+static void basic_no_commands(void)
+{
+    // No BASIC commands at start-up
+    sprint((char *)dat_buffer, "%c%c", device_number_d64(), 0);
+}
+
+static void basic_loading(const char *filename)
+{
+    // Setup string to print at BASIC start-up
+    char *dest = (char *)CRT_RAM_BUF + LOADING_OFFSET;
+    dest = convert_to_screen_code(dest, "LOADING ");
+    dest = convert_to_screen_code(dest, filename);
+    *dest = 0;
 }
 
 static bool chdir_last(void)
@@ -579,6 +713,17 @@ static bool chdir_last(void)
     return res;
 }
 
+static void sanitize_sd_filename(char *dest, const char *src, u8 size)
+{
+    for (u8 i=0; i<size && *src; i++)
+    {
+        char c = sanitize_char(*src++);
+        *dest++ = ff_wtoupper(c);
+    }
+
+    *dest = 0;
+}
+
 static void send_prg(void)
 {
     const char *name;
@@ -588,13 +733,13 @@ static void send_prg(void)
     }
     else
     {
-        name = dat_file.file;
+        // Limit filename to one line on the screen
+        sanitize_sd_filename(scratch_buf, dat_file.file, 32);
+        name = scratch_buf;
     }
 
-    sprint(scratch_buf, "Loading...\r\n\r\n%s", name);
-    c64_send_message(scratch_buf);
-
-    if(!c64_send_prg(dat_buffer, dat_file.prg.size))
+    basic_loading(name);
+    if (!c64_send_prg(dat_buffer, dat_file.prg.size))
     {
         system_restart();
     }
@@ -622,16 +767,33 @@ static void send_prg(void)
 //}
 
 
-static bool load_d64(void)
+static bool load_disk(void)
 {
     if (!chdir_last())
     {
         return false;
     }
 
-    if (!d64_open(&d64_state.d64, dat_file.file))
+    if (dat_file.disk.mode == DISK_MODE_D64)
     {
-        return false;
+        if (!d64_open(&d64_state.image, dat_file.file))
+        {
+            return false;
+        }
+    }
+    else if (dat_file.file[0])  // DISK_MODE_FS
+    {
+        FILINFO file_info;
+        if (!file_stat(dat_file.file, &file_info))
+        {
+            return false;
+        }
+
+        u8 file_type = get_file_type(&file_info);
+        if (file_type == FILE_DIR && !dir_change(dat_file.file))
+        {
+            return false;
+        }
     }
 
     return true;
@@ -640,7 +802,15 @@ static bool load_d64(void)
 static void c64_launcher_mode(void)
 {
     crt_ptr = CRT_LAUNCHER_BANK;
-    crt_install_handler(CRT_EASYFLASH, CRT_FLAG_NONE);
+    kff_init();
+    C64_INSTALL_HANDLER(kff_handler);
+}
+
+static void c64_ef3_mode_disable(void)
+{
+    c64_disable();
+    ef_init();
+    C64_INSTALL_HANDLER(ef3_handler);
 }
 
 static bool c64_set_mode(void)
@@ -654,6 +824,7 @@ static bool c64_set_mode(void)
             result = prg_size_valid(dat_file.prg.size);
             if (result)
             {
+                c64_ef3_mode_disable();
                 c64_enable();
                 send_prg();
             }
@@ -683,7 +854,7 @@ static bool c64_set_mode(void)
                 break;
             }
 
-            uint32_t flash_hash = crt_calc_flash_crc(dat_file.crt.banks);
+            u32 flash_hash = crt_calc_flash_crc(dat_file.crt.banks);
             if (flash_hash != dat_file.crt.flash_hash &&
                 !(dat_file.crt.flags & CRT_FLAG_UPDATED))
             {
@@ -693,36 +864,14 @@ static bool c64_set_mode(void)
             if (!c64_is_reset())
             {
                 // Disable VIC-II output if C64 has been started (needed for FC3)
-                c64_interface(true);
-                c64_send_wait_for_reset();
+                c64_interface_sync();
+                c64_send_command(CMD_WAIT_RESET);
                 c64_disable();
             }
 
-            crt_ptr = crt_banks[0];
-
-            uint32_t state = STATUS_LED_ON;
-            if (dat_file.crt.exrom)
-            {
-                state |= C64_EXROM_HIGH;
-            }
-            else
-            {
-                state |= C64_EXROM_LOW;
-            }
-
-            if (dat_file.crt.game)
-            {
-                state |= C64_GAME_HIGH;
-            }
-            else
-            {
-                state |= C64_GAME_LOW;
-            }
-
-            c64_crt_control(state);
+            crt_install_handler(&dat_file.crt);
             // Try prevent triggering bug in H.E.R.O. No effect at power-on though
             c64_sync_with_vic();
-            crt_install_handler(dat_file.crt.type, dat_file.crt.flags);
             c64_enable();
             result = true;
         }
@@ -730,47 +879,36 @@ static bool c64_set_mode(void)
 
         case DAT_USB:
         {
-            c64_disable();
-            ef_init();
+            c64_ef3_mode_disable();
             c64_enable();
-            c64_send_message("Communicating with USB...");
+
+            basic_loading("FROM USB");
             result = true;
         }
         break;
 
         case DAT_DISK:
         {
-            if (!load_d64())
+            if (!load_disk())
             {
                 break;
             }
 
             c64_disable();
-            ef_init();
-
-            // Copy Launcher to memory to allow bank switching in EasyFlash emulation
-            // BASIC commands to run are placed at the start of flash ($8000)
-            uint32_t offset = BASIC_CMD_BUF_SIZE;
-            memcpy(crt_banks[0] + offset, CRT_LAUNCHER_BANK + offset, 16*1024 - offset);
-            crt_ptr = crt_banks[0];
-
+            kff_init();
             c64_enable();
-            if (!c64_send_mount_disk())
-            {
-                system_restart();
-            }
             result = true;
         }
         break;
 
         case DAT_BASIC:
         {
-            c64_disable();
+            c64_ef3_mode_disable();
             // Unstoppable reset! - https://www.c64-wiki.com/wiki/Reset_Button
-            c64_crt_control(STATUS_LED_ON|CRT_PORT_8K);
+            C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_8K);
             c64_enable();
             delay_ms(300);
-            c64_crt_control(CRT_PORT_NONE);
+            C64_CRT_CONTROL(CRT_PORT_NONE);
             result = true;
         }
         break;
@@ -779,10 +917,10 @@ static bool c64_set_mode(void)
         {
             c64_disable();
             // Also unstoppable!
-            c64_crt_control(STATUS_LED_OFF|CRT_PORT_8K);
+            C64_CRT_CONTROL(STATUS_LED_OFF|CRT_PORT_8K);
             c64_reset(false);
             delay_ms(300);
-            c64_crt_control(CRT_PORT_NONE);
+            C64_CRT_CONTROL(CRT_PORT_NONE);
             result = true;
         }
         break;
@@ -790,11 +928,18 @@ static bool c64_set_mode(void)
         case DAT_KILL_C128:
         {
             c64_disable();
-            c64_crt_control(STATUS_LED_OFF|CRT_PORT_NONE);
+            C64_CRT_CONTROL(STATUS_LED_OFF|CRT_PORT_NONE);
             c64_reset(false);
             result = true;
         }
         break;
+
+        case DAT_DIAG:
+        {
+            c64_disable();
+            kff_init();
+            result = true;
+        }
     }
 
     return result;

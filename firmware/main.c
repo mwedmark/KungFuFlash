@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,26 +17,32 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include "common.h"
 #include "commands.h"
+#include "file_types.h"
 #include "print.h"
+#include "memory.h"
 #include "hal.c"
 #include "print.c"
 #include "filesystem.c"
 #include "file_types.c"
 #include "cartridge.c"
 #include "commands.c"
+#include "disk_drive.h"
 #include "menu.c"
 #include "disk_drive.c"
 #include "eapi.c"
+#include "diagnostic.c"
 
 int main(void)
 {
     configure_system();
-    log("System configured\n\n");
+    log("System configured\n");
     c64_launcher_mode();
 
     bool sd_msg_shown = false;
@@ -80,24 +86,27 @@ int main(void)
 			usb_disable();
 		}
 
-		if (!c64_set_mode())
-		{
-			c64_disable();
-			restart_to_menu();
-		}
+    if (!c64_set_mode())
+    {
+        c64_disable();
+        restart_to_menu();
+    }
 
-		if (dat_file.boot_type == DAT_DISK)
-		{
-			disk_loop();
-		}
-		else if (dat_file.boot_type == DAT_CRT &&
-				 dat_file.crt.type == CRT_EASYFLASH)
-		{
-			eapi_loop();
-		}
-	}
-	
-    dbg("In main loop...\n");
+    if (dat_file.boot_type == DAT_DISK)
+    {
+        disk_loop();
+    }
+    else if (dat_file.boot_type == DAT_CRT &&
+             dat_file.crt.type == CRT_EASYFLASH)
+    {
+        eapi_loop();
+    }
+    else if (dat_file.boot_type == DAT_DIAG)
+    {
+        diag_loop();
+    }
+
+    dbg("In main loop...");
     while (true)
     {
         // Forward data from USB to C64
@@ -107,7 +116,7 @@ int main(void)
         }
 
         // Forward data from C64 to USB
-        if (ef3_gotc())
+        if (ef3_gotc() && usb_can_putc())
         {
             usb_putc(ef3_getc());
         }

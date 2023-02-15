@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -25,7 +25,6 @@
  * According to kim-os license, you can do whatever you want with it,
  * as long as you retain this notice.
  */
-#define ARRAY_COUNT(array) (sizeof(array) / sizeof(*(array)))
 
 #define V_NON 0 /* No log */
 #define V_CRT 1 /* Log critical */
@@ -39,31 +38,31 @@
 #endif
 
 #if (VERB >= V_CRT)
-    #define crt(...) print("[CRT] " __VA_ARGS__)
+    #define crt(...) print_log("[CRT] ", __VA_ARGS__)
 #else
     #define crt(...)
 #endif
 
 #if (VERB >= V_ERR)
-    #define err(...) print("[ERR] " __VA_ARGS__)
+    #define err(...) print_log("[ERR] ", __VA_ARGS__)
 #else
     #define err(...)
 #endif
 
 #if (VERB >= V_WRN)
-    #define wrn(...) print("[WRN] " __VA_ARGS__)
+    #define wrn(...) print_log("[WRN] ", __VA_ARGS__)
 #else
     #define wrn(...)
 #endif
 
 #if (VERB >= V_LOG)
-    #define log(...) print("[LOG] " __VA_ARGS__)
+    #define log(...) print_log("[LOG] ", __VA_ARGS__)
 #else
     #define log(...)
 #endif
 
 #if (VERB >= V_DBG)
-    #define dbg(...) print("[DBG] " __VA_ARGS__)
+    #define dbg(...) print_log("[DBG] ", __VA_ARGS__)
 #else
     #define dbg(...)
 #endif
@@ -72,4 +71,5 @@
 #define isdigit(c)	((c) >= '0' && (c) <= '9')
 
 static void print(const char *fmt, ...);
+static void print_log(const char *level, const char *fmt, ...);
 static void sprint(char *buf, const char *fmt, ...);

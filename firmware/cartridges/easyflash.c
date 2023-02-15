@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,7 +17,8 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
-static uint32_t const ef_mode[8] =
+
+static u32 const ef_mode[8] =
 {
     STATUS_LED_OFF|CRT_PORT_ULTIMAX,
     STATUS_LED_OFF|CRT_PORT_NONE,
@@ -30,84 +31,44 @@ static uint32_t const ef_mode[8] =
     STATUS_LED_ON|CRT_PORT_8K
 };
 
-// EasyFlash 3 USB Control
-#define EF3_RX_RDY  (0x80)
-#define EF3_TX_RDY  (0x40)
-#define EF3_NOT_RDY (0x00)
-
-static volatile uint8_t ef3_usb_rx_rdy = EF3_NOT_RDY;
-static volatile uint8_t ef3_usb_tx_rdy = EF3_TX_RDY;
-
-// EasyFlash 3 USB Data
-static volatile uint8_t ef3_usb_rx_data;
-static volatile uint8_t ef3_usb_tx_data;
-
-static inline bool ef3_can_putc(void)
+/*************************************************
+* C64 bus read callback (early VIC-II cycle)
+*************************************************/
+FORCE_INLINE u32 ef_early_vic_handler(u32 addr)
 {
-    return !ef3_usb_rx_rdy;
+    // Speculative read
+    return crt_ptr[addr & 0x3fff];
 }
 
-static void ef3_putc(uint8_t data)
+/*************************************************
+* C64 bus read callback (VIC-II cycle)
+*************************************************/
+FORCE_INLINE bool ef_vic_read_handler(u32 control, u32 data)
 {
-    while (ef3_usb_rx_rdy);
+    if ((control & (C64_ROML|C64_ROMH)) != (C64_ROML|C64_ROMH))
+    {
+        C64_DATA_WRITE(data);
+        return true;
+    }
 
-    ef3_usb_rx_data = data;
-    ef3_usb_rx_rdy = EF3_RX_RDY;
-}
-
-static inline bool ef3_gotc(void)
-{
-    return !ef3_usb_tx_rdy;
-}
-
-static uint8_t ef3_getc(void)
-{
-    while (ef3_usb_tx_rdy);
-
-    uint8_t data = ef3_usb_tx_data;
-    COMPILER_BARRIER();
-    ef3_usb_tx_rdy = EF3_TX_RDY;
-    return data;
+    return false;
 }
 
 /*************************************************
 * C64 bus read callback
 *************************************************/
-static inline bool ef_read_handler(uint8_t control, uint16_t addr)
+FORCE_INLINE bool ef_read_handler(u32 control, u32 addr)
 {
     if ((control & (C64_ROML|C64_ROMH)) != (C64_ROML|C64_ROMH))
     {
-        c64_data_write(crt_ptr[addr & 0x3fff]);
+        C64_DATA_WRITE(crt_ptr[addr & 0x3fff]);
         return true;
-    }
-
-    if (!(control & C64_IO1))
-    {
-        switch (addr & 0xff)
-        {
-            // $de09 EF3 USB Control register
-            case 0x09:
-            {
-                c64_data_write(ef3_usb_rx_rdy | ef3_usb_tx_rdy);
-            }
-            return true;
-
-            // $de0a EF3 USB Data register
-            case 0x0a:
-            {
-                c64_data_write(ef3_usb_rx_data);
-                ef3_usb_rx_rdy = EF3_NOT_RDY;
-            }
-            return true;
-        }
-
-        return false;
     }
 
     if (!(control & C64_IO2))
     {
         // EasyFlash RAM at $df00-$dfff
-        c64_data_write(crt_ram_buf[addr & 0xff]);
+        C64_DATA_WRITE(CRT_RAM_BUF[addr & 0xff]);
         return true;
     }
 
@@ -117,7 +78,7 @@ static inline bool ef_read_handler(uint8_t control, uint16_t addr)
 /*************************************************
 * C64 bus write callback
 *************************************************/
-static inline void ef_write_handler(uint8_t control, uint16_t addr, uint8_t data)
+FORCE_INLINE void ef_write_handler(u32 control, u32 addr, u32 data)
 {
     if (!(control & C64_IO1))
     {
@@ -143,17 +104,9 @@ static inline void ef_write_handler(uint8_t control, uint16_t addr, uint8_t data
             */
             case 0x02:
             {
-                uint32_t mode = ef_mode[((data >> 5) & 0x04) | (data & 0x02) |
-                                        (((data >> 2) & 0x01) & ~data)];
-                c64_crt_control(mode);
-            }
-            return;
-
-            // $de0a EF3 USB Data register
-            case 0x0a:
-            {
-                ef3_usb_tx_data = data;
-                ef3_usb_tx_rdy = EF3_NOT_RDY;
+                u32 mode = ef_mode[((data >> 5) & 0x04) | (data & 0x02) |
+                                   (((data >> 2) & 0x01) & ~data)];
+                C64_CRT_CONTROL(mode);
             }
             return;
         }
@@ -164,19 +117,15 @@ static inline void ef_write_handler(uint8_t control, uint16_t addr, uint8_t data
     if (!(control & C64_IO2))
     {
         // EasyFlash RAM at $df00-$dfff
-        crt_ram_buf[addr & 0xff] = data;
+        CRT_RAM_BUF[addr & 0xff] = (u8)data;
         return;
     }
 }
 
 static void ef_init(void)
 {
-    c64_crt_control(STATUS_LED_ON|CRT_PORT_ULTIMAX);
+    C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_ULTIMAX);
 }
 
-// Allow SDIO and USB to be used while handling C64 bus access.
-// Does not support VIC-II or C128 2 MHz reads from cartridge
-C64_BUS_HANDLER_(ef_sdio_handler, ef_read_handler, ef_write_handler)
-
-// Needed for C128 read accesses at 2 MHz (e.g. for Prince of Persia)
-C64_C128_BUS_HANDLER(ef)
+// Needed for VIC-II and C128 read accesses at 2 MHz (e.g. for Prince of Persia)
+C64_VIC_BUS_HANDLER(ef)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,16 +17,17 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
+
 typedef struct
 {
-    MENU_STATE menu;
-
     bool in_root;
     bool dir_end;
 
     DIR start_page;
     DIR end_page;
-    uint16_t page_no;
+    u16 page_no;
+
+    char search[SEARCH_LENGTH+2];
 } SD_STATE;
 
 static SD_STATE sd_state;

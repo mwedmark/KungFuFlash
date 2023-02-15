@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -18,15 +18,14 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-static MENU_STATE * d64_menu_init(const char *file_name);
+static const MENU * d64_menu_init(const char *file_name);
 
 typedef struct
 {
-    MENU_STATE menu;
-
     D64 d64;
+    D64_IMAGE image;
 
-    uint8_t page;
+    u8 page;
     bool dir_end;
 } D64_STATE;
 

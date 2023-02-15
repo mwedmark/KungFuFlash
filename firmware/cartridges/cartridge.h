@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,33 +17,35 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
+
 #define CRT_PORT_NONE       (C64_EXROM_HIGH|C64_GAME_HIGH)  // No cartridge
 #define CRT_PORT_8K         (C64_EXROM_LOW|C64_GAME_HIGH)   // 8k cartridge
 #define CRT_PORT_16K        (C64_EXROM_LOW|C64_GAME_LOW)    // 16k cartridge
 #define CRT_PORT_ULTIMAX    (C64_EXROM_HIGH|C64_GAME_LOW)   // Ultimax cartridge
 
-#define CRT_FLASH_BANK(bank)    ((uint8_t *)FLASH_BASE + (uint32_t)(16*1024 * bank))
+#define CRT_FLASH_BANK(bank)    ((u8 *)FLASH_BASE + (u32)(16*1024 * bank))
 #define CRT_LAUNCHER_BANK       CRT_FLASH_BANK(3)
 
-#define CRT_DAT_BANK(bank)      (dat_buffer + (uint32_t)(16*1024 * bank))
-#define CRT_RAM1_BANK(bank)     (crt_ram_buf + (uint32_t)(8*1024 * bank))
-#define CRT_RAM2_BANK(bank)     ((uint8_t *)scratch_buf + (uint32_t)(8*1024 * bank))
+#define CRT_DAT_BANK(bank)      (dat_buffer + (u32)(16*1024 * bank))
 
-static uint8_t crt_ram_buf[16*1024];
-static uint8_t *crt_ptr;        // Current ROM or RAM bank pointer
-static uint8_t *crt_rom_ptr;    // Current ROM bank pointer (only used by some cartridges)
+#define CRT_RAM_BUF             (crt_ram_buf)
+#define CRT_RAM_BANK(bank)      (CRT_RAM_BUF + (u32)(8*1024 * bank))
 
 // Fast look-up of 8k RAM bank address
-static uint8_t * const crt_ram_banks[4] =
+static u8 * const crt_ram_banks[8] =
 {
-    CRT_RAM1_BANK(0),
-    CRT_RAM1_BANK(1),
-    CRT_RAM2_BANK(0),
-    CRT_RAM2_BANK(1)
+    CRT_RAM_BANK(0),
+    CRT_RAM_BANK(1),
+    CRT_RAM_BANK(2),
+    CRT_RAM_BANK(3),
+    CRT_RAM_BANK(0), // Mirror of first 32k
+    CRT_RAM_BANK(1),
+    CRT_RAM_BANK(2),
+    CRT_RAM_BANK(3)
 };
 
 // Fast look-up of 16k ROM bank address
-static uint8_t * const crt_banks[64] =
+static u8 * const crt_banks[64] =
 {
     CRT_DAT_BANK(0),
     CRT_DAT_BANK(1),
@@ -111,12 +113,9 @@ static uint8_t * const crt_banks[64] =
     CRT_FLASH_BANK(63)
 };
 
-#define FREEZE_RELEASED 0
-#define FREEZE_PRESSED  1
+#define SPECIAL_RELEASED    0
+#define SPECIAL_PRESSED     1
 
 #define FREEZE_RESET    0
 #define FREEZE_START    1
 #define FREEZE_3_WRITES 4   // 3 Consecutive writes after FREEZE_START
-
-static uint8_t freezer_button;
-static uint8_t freezer_state;

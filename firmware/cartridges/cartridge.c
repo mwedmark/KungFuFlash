@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,45 +17,77 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
+
 #include "cartridge.h"
+
+// Current ROM or RAM bank pointer
+static u8 *crt_ptr;
+
+// Current ROM bank pointer (only used by some cartridges)
+static u8 *crt_rom_ptr;
+
+static u32 special_button;
+static u32 freezer_state;
+
+/* ordered by cartridge id */
 #include "crt_normal.c"
 #include "action_replay_4x.c"
 #include "kcs_power_cartridge.c"
 #include "final_cartridge_3.c"
 #include "simons_basic.c"
+#include "super_games.c"
 #include "epyx_fastload.c"
 #include "c64gs_system_3.c"
+#include "warpspeed.c"
 #include "dinamic.c"
 #include "zaxxon.c"
 #include "magic_desk.c"
 #include "super_snapshot_5.c"
-#include "easyflash.c"
 #include "comal80.c"
+#include "easyflash.c"
+#include "easyflash_3.c"
+#include "prophet64.c"
+#include "freeze_machine.c"
+#include "pagefox.c"
+#include "rgcd.c"
+#include "c128_normal.c"
+#include "kff.c"
 
-static void (*crt_get_handler(uint16_t cartridge_type, bool vic_support)) (void)
+#define NTSC_OR_PAL_HANDLER(name)   \
+    ntsc ? name##_ntsc_handler : name##_pal_handler
+
+static void (*crt_get_handler(u32 cartridge_type, bool vic_support)) (void)
 {
+    bool ntsc = c64_is_ntsc();
     switch (cartridge_type)
     {
         case CRT_NORMAL_CARTRIDGE:
-            return crt_handler;
+            return NTSC_OR_PAL_HANDLER(crt);
 
         case CRT_ACTION_REPLAY:
-            return ar4x_handler;
+            return NTSC_OR_PAL_HANDLER(ar4x);
 
         case CRT_KCS_POWER_CARTRIDGE:
-            return kcs_handler;
+            return NTSC_OR_PAL_HANDLER(kcs);
 
         case CRT_FINAL_CARTRIDGE_III:
-            return fc3_handler;
+            return NTSC_OR_PAL_HANDLER(fc3);
 
         case CRT_SIMONS_BASIC:
             return simons_basic_handler;
+
+        case CRT_SUPER_GAMES:
+            return super_games_handler;
 
         case CRT_EPYX_FASTLOAD:
             return epyx_handler;
 
         case CRT_C64_GAME_SYSTEM_SYSTEM_3:
             return c64gs_handler;
+
+        case CRT_WARP_SPEED:
+        case CRT_C128_WARP_SPEED:
+            return NTSC_OR_PAL_HANDLER(warpspeed);
 
         case CRT_DINAMIC:
             return dinamic_handler;
@@ -68,76 +100,141 @@ static void (*crt_get_handler(uint16_t cartridge_type, bool vic_support)) (void)
             return magic_desk_handler;
 
         case CRT_SUPER_SNAPSHOT_V5:
-            return ss5_handler;
+            return NTSC_OR_PAL_HANDLER(ss5);
 
         case CRT_COMAL_80:
             return comal80_handler;
 
         case CRT_OCEAN_TYPE_1:
         case CRT_EASYFLASH:
-            if (vic_support)
+            if (cartridge_type != CRT_EASYFLASH || vic_support)
             {
-                return ef_handler;
+                return NTSC_OR_PAL_HANDLER(ef);
             }
-            else
-            {
-                return ef_sdio_handler;
-            }
+            return ef3_handler;
+
+        case CRT_PROPHET64:
+        case CRT_DREAN:
+            return prophet64_handler;
+
+        case CRT_FREEZE_FRAME:
+        case CRT_FREEZE_MACHINE:
+            return NTSC_OR_PAL_HANDLER(fm);
+
+        case CRT_PAGEFOX:
+            return pagefox_handler;
+
+        case CRT_RGCD:
+            return rgcd_handler;
+
+        case CRT_C128_NORMAL_CARTRIDGE:
+            return NTSC_OR_PAL_HANDLER(c128);
     }
 
     return NULL;
 }
 
-static void (*crt_get_init(uint16_t cartridge_type)) (void)
+static void crt_init(DAT_CRT_HEADER *crt_header)
 {
-    switch (cartridge_type)
+    switch (crt_header->type)
     {
         case CRT_ACTION_REPLAY:
-            return ar4x_init;
+            ar4x_init();
+            break;
 
         case CRT_KCS_POWER_CARTRIDGE:
-            return kcs_init;
+            kcs_init();
+            break;
 
         case CRT_FINAL_CARTRIDGE_III:
-            return fc3_init;
+            fc3_init();
+            break;
 
         case CRT_EPYX_FASTLOAD:
-            return epyx_init;
+            epyx_init();
+            break;
+
+        case CRT_WARP_SPEED:
+        case CRT_C128_WARP_SPEED:
+            warpspeed_init(crt_header);
+            break;
 
         case CRT_ZAXXON_SUPER_ZAXXON:
-            return zaxxon_init;
+            zaxxon_init();
+            break;
 
         case CRT_FUN_PLAY_POWER_PLAY:
         case CRT_MAGIC_DESK_DOMARK_HES_AUSTRALIA:
-            return magic_desk_init;
+            magic_desk_init();
+            break;
 
         case CRT_SUPER_SNAPSHOT_V5:
-            return ss5_init;
+            ss5_init();
+            break;
 
         case CRT_COMAL_80:
-            return comal80_init;
+            comal80_init();
+            break;
 
         case CRT_EASYFLASH:
-            return ef_init;
-    }
+            ef_init();
+            break;
 
-    return NULL;
+        case CRT_FREEZE_FRAME:
+        case CRT_FREEZE_MACHINE:
+            fm_init(crt_header);
+            break;
+
+        case CRT_PAGEFOX:
+            pagefox_init();
+            break;
+
+        case CRT_RGCD:
+            rgcd_init(crt_header);
+            break;
+    }
 }
 
-static void crt_install_handler(uint16_t cartridge_type, uint8_t flags)
+static void crt_install_handler(DAT_CRT_HEADER *crt_header)
 {
-    void (*init)(void) = crt_get_init(cartridge_type);
-    if (init)
+    u32 state = STATUS_LED_ON;
+    if (!(crt_header->type & CRT_C128_CARTRIDGE))
     {
-        init();
+        if (crt_header->exrom)
+        {
+            state |= C64_EXROM_HIGH;
+        }
+        else
+        {
+            state |= C64_EXROM_LOW;
+        }
+
+        if (crt_header->game)
+        {
+            state |= C64_GAME_HIGH;
+        }
+        else
+        {
+            state |= C64_GAME_LOW;
+        }
+    }
+    else
+    {
+        state |= CRT_PORT_NONE;
     }
 
-    bool vic_support = (flags & CRT_FLAG_VIC) != 0;
+    C64_CRT_CONTROL(state);
+
+    crt_ptr = crt_banks[0];
+    crt_init(crt_header);
+
+    u32 cartridge_type = crt_header->type;
+    bool vic_support = (crt_header->flags & CRT_FLAG_VIC) != 0;
     void (*handler)(void) = crt_get_handler(cartridge_type, vic_support);
     C64_INSTALL_HANDLER(handler);
 }
 
-static bool crt_is_supported(uint16_t cartridge_type)
+static bool crt_is_supported(u32 cartridge_type)
 {
     return crt_get_handler(cartridge_type, false) != NULL;
 }

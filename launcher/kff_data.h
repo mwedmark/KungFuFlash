@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,35 +17,19 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
-#include "kff_usb.h"
 
-static uint8_t cmd_buf[] = "kff:\x00\x00";
+#include <stdint.h>
+#include "launcher_asm.h"
 
-uint8_t ef3usb_receive_byte(void)
-{
-    while (!(USB_STATUS & USB_RX_READY));
-    return USB_DATA;
-}
+#ifndef KFF_DATA_H
+#define KFF_DATA_H
 
-void ef3usb_send_byte(uint8_t data)
-{
-    while (!(USB_STATUS & USB_TX_READY));
-    USB_DATA = data;
-}
+#define KFF_DATA    *((volatile uint8_t*) 0xde00)
+#define KFF_COMMAND *((volatile uint8_t*) 0xde01)
 
-uint8_t kff_send_command(uint8_t cmd)
-{
-    cmd_buf[4] = cmd;
-    ef3usb_send_data(cmd_buf, 5);
+#define KFF_SEND_BYTE(data) KFF_DATA = (data)
+#define KFF_GET_COMMAND()   (KFF_COMMAND)
 
-    return ef3usb_receive_byte();
-}
+uint8_t kff_send_reply_progress(uint8_t reply);
 
-uint8_t kff_send_ext_command(uint8_t cmd, uint8_t data)
-{
-    cmd_buf[4] = cmd;
-    cmd_buf[5] = data;
-    ef3usb_send_data(cmd_buf, 6);
-
-    return ef3usb_receive_byte();
-}
+#endif

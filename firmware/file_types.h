@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -18,8 +18,9 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-// From http://vice-emu.sourceforge.net/vice_16.html
-typedef enum {
+// From https://vice-emu.sourceforge.io/vice_17.html
+typedef enum
+{
     CRT_NORMAL_CARTRIDGE = 0x00,
     CRT_ACTION_REPLAY,
     CRT_KCS_POWER_CARTRIDGE,
@@ -80,10 +81,33 @@ typedef enum {
     CRT_RGCD,
     CRT_RR_NET_MK3,
     CRT_EASYCALC,
-    CRT_GMOD2
+    CRT_GMOD2,
+    CRT_MAX_BASIC,
+    CRT_GMOD3,
+    CRT_ZIPP_CODE_48,
+    CRT_BLACKBOX_V8,
+    CRT_BLACKBOX_V3,
+    CRT_BLACKBOX_V4,
+    CRT_REX_RAM_FLOPPY,
+    CRT_BIS_PLUS,
+    CRT_SD_BOX,
+    CRT_MULTIMAX,
+    CRT_BLACKBOX_V9,
+    CRT_LT_KERNAL_HOST_ADAPTOR,
+    CRT_RAMLINK,
+    CRT_DREAN,
+    CRT_IEEE_FLASH_64,
+    CRT_TURTLE_GRAPHICS_II,
+	CRT_FREEZE_FRAME_MK2,
+
+    // KFF specific extensions
+    CRT_C128_CARTRIDGE = 0x8000,
+    CRT_C128_NORMAL_CARTRIDGE = CRT_C128_CARTRIDGE,
+    CRT_C128_WARP_SPEED
 } CRT_TYPE;
 
-typedef enum {
+typedef enum
+{
     CRT_CHIP_ROM = 0x00,
     CRT_CHIP_RAM,
     CRT_CHIP_FLASH
@@ -93,31 +117,32 @@ typedef enum {
 #pragma pack(1)
 typedef struct
 {
-    uint8_t signature[16];
-    uint32_t header_length;
-    uint16_t version;
-    uint16_t cartridge_type;
-    uint8_t exrom;
-    uint8_t game;
-    uint8_t reserved[6];
-    uint8_t cartridge_name[32];
+    u8 signature[16];
+    u32 header_length;
+    u16 version;
+    u16 cartridge_type;
+    u8 exrom;
+    u8 game;
+    u8 hardware_revision;
+    u8 reserved[5];
+    u8 cartridge_name[32];
 } CRT_HEADER;
 
 typedef struct
 {
-    uint8_t signature[4];
-    uint32_t packet_length;
-    uint16_t chip_type;
-    uint16_t bank;
-    uint16_t start_address;
-    uint16_t image_size;
+    u8 signature[4];
+    u32 packet_length;
+    u16 chip_type;
+    u16 bank;
+    u16 start_address;
+    u16 image_size;
 } CRT_CHIP_HEADER;
 
 typedef struct
 {
     char signature[8];
     char filename[17];
-    uint8_t rel_record_size;
+    u8 rel_record_size;
 } P00_HEADER;
 
 #define SID_SIGNATURE "PSID"
@@ -146,13 +171,18 @@ typedef struct
 } SID_HEADER;
 #pragma pack(pop)
 
-typedef enum {
-    FILE_NONE       = 0x00,
+typedef enum
+{
+    FILE_DIR        = 0x00,
+    FILE_DIR_UP,
     FILE_CRT,
     FILE_PRG,
     FILE_P00,
     FILE_D64,
+    FILE_D64_STAR,
     FILE_D64_PRG,
+    FILE_T64,
+    FILE_T64_PRG,
     FILE_ROM,
 	FILE_SID,
 
@@ -161,11 +191,20 @@ typedef enum {
     FILE_UNKNOWN
 } FILE_TYPE;
 
-typedef enum {
-    DAT_FLAG_PERSIST_BASIC = 0x01
+typedef enum
+{
+    DAT_FLAG_PERSIST_BASIC      = 0x01,
+    DAT_FLAG_AUTOSTART_D64      = 0x02,
+    DAT_FLAG_DEVICE_NUM_D64_1   = 0x04,
+    DAT_FLAG_DEVICE_NUM_D64_2   = 0x08,
+    DAT_FLAG_DEVICE_NUM_D64_3   = 0x10
 } DAT_FLAGS;
 
-typedef enum {
+#define DAT_FLAG_DEVICE_D64_POS 0x02
+#define DAT_FLAG_DEVICE_D64_MSK (0x07 << DAT_FLAG_DEVICE_D64_POS)
+
+typedef enum
+{
     DAT_NONE = 0x00,
     DAT_CRT,
     DAT_PRG,
@@ -175,47 +214,62 @@ typedef enum {
     DAT_KERNAL,
     DAT_BASIC,
     DAT_KILL,
-    DAT_KILL_C128
+    DAT_KILL_C128,
+    DAT_DIAG
 } DAT_BOOT_TYPE;
 
-typedef enum {
+typedef enum
+{
     CRT_FLAG_NONE       = 0x00,
     CRT_FLAG_UPDATED    = 0x01, // EasyFlash CRT has been updated via EAPI
 
     CRT_FLAG_VIC        = 0x80  // Support VIC/C128 2MHz mode reads (EF only)
 } DAT_CRT_FLAGS;
 
+typedef enum
+{
+    DISK_MODE_FS    = 0x00, // Use filesystem
+    DISK_MODE_D64   = 0x01  // Use D64 disk image
+} DAT_DISK_MODE;
+
 #pragma pack(push)
 #pragma pack(1)
 typedef struct
 {
-    uint16_t type;          // CRT_TYPE
-    uint8_t exrom;          // EXROM line status
-    uint8_t game;           // GAME line status
-    uint8_t banks;          // Number of 16k CRT banks in use (0-64)
-    uint8_t flags;          // DAT_CRT_FLAGS
-    uint32_t flash_hash;    // Used id crt_banks > 4
+    u16 type;           // CRT_TYPE
+    u8 hw_rev;          // Cartridge hardware revision
+    u8 exrom;           // EXROM line status
+    u8 game;            // GAME line status
+    u8 banks;           // Number of 16k CRT banks in use (0-64)
+    u8 flags;           // DAT_CRT_FLAGS
+    u32 flash_hash;     // Used id crt_banks > 4
 } DAT_CRT_HEADER;
 
 typedef struct
 {
-    uint16_t size;
-    uint16_t element;       // Used if file is a D64
-    char name[17];          // Used if file is a P00 or D64
+    u16 size;
+    u16 element;        // Used if file is a T64 or D64
+    char name[17];      // Used if file is a P00, T64, or D64
 } DAT_PRG_HEADER;
 
 typedef struct
 {
-    uint8_t signature[8];   // DAT_SIGNATURE
+    u8 mode;            // DAT_DISK_MODE
+} DAT_DISK_HEADER;
 
-    uint8_t flags;          // DAT_FLAGS
-    uint8_t boot_type;      // DAT_BOOT_TYPE
-    uint8_t reserved;       // Should be 0
+typedef struct
+{
+    u8 signature[8];    // DAT_SIGNATURE
+
+    u8 flags;           // DAT_FLAGS
+    u8 boot_type;       // DAT_BOOT_TYPE
+    s8 phi2_offset;
 
     union
     {
-        DAT_CRT_HEADER crt; // boot_type == DAT_CRT
-        DAT_PRG_HEADER prg; // boot_type == DAT_PRG
+        DAT_CRT_HEADER crt;     // boot_type == DAT_CRT
+        DAT_PRG_HEADER prg;     // boot_type == DAT_PRG
+        DAT_DISK_HEADER disk;   // boot_type == DAT_DISK
     };
 
     char path[736];
@@ -231,3 +285,4 @@ typedef struct
 DAT_HEADER dat_file;
 __attribute__((__section__(".sram"))) uint8_t dat_buffer[64*1024];
 #pragma pack(pop)
+static DAT_HEADER dat_file;

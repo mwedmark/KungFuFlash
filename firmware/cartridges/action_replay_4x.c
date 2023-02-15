@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,7 +17,8 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
-static uint32_t const ar4x_mode[4] =
+
+static u32 const ar4x_mode[4] =
 {
     STATUS_LED_ON|CRT_PORT_8K,
     STATUS_LED_ON|CRT_PORT_16K,
@@ -28,7 +29,7 @@ static uint32_t const ar4x_mode[4] =
 /*************************************************
 * C64 bus read callback (VIC-II cycle)
 *************************************************/
-static inline bool ar4x_vic_read_handler(uint8_t control, uint16_t addr)
+FORCE_INLINE bool ar4x_vic_read_handler(u32 control, u32 addr)
 {
     // Not needed
     return false;
@@ -37,7 +38,7 @@ static inline bool ar4x_vic_read_handler(uint8_t control, uint16_t addr)
 /*************************************************
 * C64 bus read callback (CPU cycle)
 *************************************************/
-static inline bool ar4x_read_handler(uint8_t control, uint16_t addr)
+FORCE_INLINE bool ar4x_read_handler(u32 control, u32 addr)
 {
     // Not 100% accurate: ROM should not be accessible at IO2
     // in 16k & Ultimax mode nor at ROML in 16k mode
@@ -45,7 +46,7 @@ static inline bool ar4x_read_handler(uint8_t control, uint16_t addr)
     {
         if (crt_ptr)
         {
-            c64_data_write(crt_ptr[addr & 0x1fff]);
+            C64_DATA_WRITE(crt_ptr[addr & 0x1fff]);
             return true;
         }
 
@@ -56,7 +57,7 @@ static inline bool ar4x_read_handler(uint8_t control, uint16_t addr)
     {
         if (crt_rom_ptr)
         {
-            c64_data_write(crt_rom_ptr[addr & 0x1fff]);
+            C64_DATA_WRITE(crt_rom_ptr[addr & 0x1fff]);
             return true;
         }
 
@@ -65,12 +66,12 @@ static inline bool ar4x_read_handler(uint8_t control, uint16_t addr)
 
     if (control & SPECIAL_BTN)
     {
-        freezer_button = FREEZE_PRESSED;
+        special_button = SPECIAL_PRESSED;
     }
-    else if (freezer_button)
+    else if (special_button)
     {
-        c64_irq_nmi(C64_IRQ_NMI_LOW);
-        freezer_button = FREEZE_RELEASED;
+        C64_IRQ_NMI(C64_IRQ_NMI_LOW);
+        special_button = SPECIAL_RELEASED;
         freezer_state = FREEZE_START;
     }
 
@@ -80,12 +81,12 @@ static inline bool ar4x_read_handler(uint8_t control, uint16_t addr)
 /*************************************************
 * C64 bus write callback (early)
 *************************************************/
-static inline void ar4x_early_write_handler(void)
+FORCE_INLINE void ar4x_early_write_handler(void)
 {
     // Use 3 consecutive writes to detect IRQ/NMI
     if (freezer_state && ++freezer_state == FREEZE_3_WRITES)
     {
-        c64_crt_control(STATUS_LED_ON|CRT_PORT_ULTIMAX);
+        C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_ULTIMAX);
         freezer_state = FREEZE_RESET;
 
         crt_rom_ptr = crt_banks[0];
@@ -96,7 +97,7 @@ static inline void ar4x_early_write_handler(void)
 /*************************************************
 * C64 bus write callback
 *************************************************/
-static inline void ar4x_write_handler(uint8_t control, uint16_t addr, uint8_t data)
+FORCE_INLINE void ar4x_write_handler(u32 control, u32 addr, u32 data)
 {
     if (crt_ptr)
     {
@@ -114,14 +115,14 @@ static inline void ar4x_write_handler(uint8_t control, uint16_t addr, uint8_t da
         {
             if (data & 0x40)
             {
-                c64_irq_nmi(C64_IRQ_NMI_HIGH);
+                C64_IRQ_NMI(C64_IRQ_NMI_HIGH);
             }
 
             if (!(data & 0x04))
             {
-                c64_crt_control(ar4x_mode[data & 0x03]);
+                C64_CRT_CONTROL(ar4x_mode[data & 0x03]);
 
-                uint8_t bank = (data >> 3) & 0x03;
+                u8 bank = (data >> 3) & 0x03;
                 crt_rom_ptr = crt_banks[bank];
 
                 if (data & 0x20)
@@ -136,7 +137,7 @@ static inline void ar4x_write_handler(uint8_t control, uint16_t addr, uint8_t da
             else
             {
                 // Disable cartridge
-                c64_crt_control(STATUS_LED_OFF|CRT_PORT_NONE);
+                C64_CRT_CONTROL(STATUS_LED_OFF|CRT_PORT_NONE);
                 crt_ptr = NULL;
                 crt_rom_ptr = NULL;
             }
@@ -146,7 +147,7 @@ static inline void ar4x_write_handler(uint8_t control, uint16_t addr, uint8_t da
 
         if ((control & (C64_IO2|C64_ROML)) != (C64_IO2|C64_ROML) && crt_ptr != crt_rom_ptr)
         {
-            crt_ptr[addr & 0x1fff] = data;
+            crt_ptr[addr & 0x1fff] = (u8)data;
             return;
         }
     }
@@ -154,7 +155,7 @@ static inline void ar4x_write_handler(uint8_t control, uint16_t addr, uint8_t da
 
 static void ar4x_init(void)
 {
-    c64_crt_control(STATUS_LED_ON|CRT_PORT_8K);
+    C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_8K);
     crt_rom_ptr = crt_ptr;
 }
 

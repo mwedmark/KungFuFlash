@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,35 +17,36 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
-static uint16_t epyx_cycles;
+
+static u16 epyx_cycles;
 
 /*************************************************
 * C64 bus read callback
 *************************************************/
-static inline bool epyx_read_handler(uint8_t control, uint16_t addr)
+FORCE_INLINE bool epyx_read_handler(u32 control, u32 addr)
 {
     if (!(control & C64_ROML))
     {
         epyx_cycles = 512;
-        c64_data_write(crt_ptr[addr & 0x1fff]);
+        C64_DATA_WRITE(crt_ptr[addr & 0x1fff]);
         return true;
     }
 
     if (!(control & C64_IO2))
     {
-        c64_data_write(crt_ptr[addr & 0x1fff]);
+        C64_DATA_WRITE(crt_ptr[addr & 0x1fff]);
         return true;
     }
 
     if (!(control & C64_IO1))
     {
         epyx_cycles = 512;
-        c64_crt_control(STATUS_LED_ON|CRT_PORT_8K);
+        C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_8K);
     }
     else if (epyx_cycles && --epyx_cycles == 0)
     {
         // Disable cartridge
-        c64_crt_control(STATUS_LED_OFF|CRT_PORT_NONE);
+        C64_CRT_CONTROL(STATUS_LED_OFF|CRT_PORT_NONE);
     }
 
     return false;
@@ -54,14 +55,14 @@ static inline bool epyx_read_handler(uint8_t control, uint16_t addr)
 /*************************************************
 * C64 bus write callback
 *************************************************/
-static inline void epyx_write_handler(uint8_t control, uint16_t addr, uint8_t data)
+FORCE_INLINE void epyx_write_handler(u32 control, u32 addr, u32 data)
 {
     // No write support
 }
 
 static void epyx_init(void)
 {
-    c64_crt_control(STATUS_LED_ON|CRT_PORT_8K);
+    C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_8K);
 }
 
 C64_BUS_HANDLER(epyx)

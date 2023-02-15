@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2022 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -18,18 +18,57 @@
  * 3. This notice may not be removed or altered from any source distribution.
  */
 
-typedef struct
+static const u16 dir_start_addr = 0x0401;   // Start of BASIC (for the PET)
+static const u16 dir_link_addr = 0x0101;
+
+static u8 disk_last_error;
+
+typedef enum
 {
-    const char *name;
-    uint8_t drive;
-    uint8_t type;
-    char mode;
-} PARSED_FILENAME;
+    DISK_STATUS_OK          = 00,
+    DISK_STATUS_SCRATCHED   = 01,
+    DISK_STATUS_NOT_FOUND   = 62,
+    DISK_STATUS_EXISTS      = 63,
+    DISK_STATUS_INIT        = 73,
+    DISK_STATUS_UNSUPPORTED = 0xFF
+} DISK_STATUS;
 
 typedef struct
 {
-    uint8_t number;
-    uint8_t bytes_left;
-    uint8_t bytes_ptr;
-    D64_SECTOR sector;
+    const char *name;
+    bool wildcard;
+    bool overwrite;
+    u8 drive;
+    u8 type;
+    char mode;
+} PARSED_FILENAME;
+
+typedef enum
+{
+    DISK_BUF_NONE   = 0x00,
+    DISK_BUF_USE,
+    DISK_BUF_DIR,
+    DISK_BUF_SAVE
+} DISK_BUF_MODE;
+
+typedef struct
+{
+    u8 number;
+
+    u8 buf_mode;    // DISK_BUF_MODE
+    u16 buf_len;
+    u16 buf_ptr;
+    u8 buf[256];
+
+    union
+    {
+        char filename[256];
+        u8 buf2[256];
+    };
+    char *filename_dir;
+    u8 buf2_ptr;
+
+    D64 d64;
+    DIR dir;
+    FIL file;
 } DISK_CHANNEL;

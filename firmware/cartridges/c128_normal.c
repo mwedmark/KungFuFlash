@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -17,15 +17,28 @@
  *    misrepresented as being the original software.
  * 3. This notice may not be removed or altered from any source distribution.
  */
-#ifndef KFF_USB_H
-#define KFF_USB_H
 
-#include <stdint.h>
-#include "ef3usb.h"
+/*************************************************
+* C64 bus read callback
+*************************************************/
+FORCE_INLINE bool c128_read_handler(u32 control, u32 addr)
+{
+    if ((control & (C64_ROML|C64_ROMH)) != (C64_ROML|C64_ROMH))
+    {
+        C64_DATA_WRITE(crt_ptr[addr & 0x7fff]);
+        return true;
+    }
 
-uint8_t ef3usb_receive_byte(void);
-void ef3usb_send_byte(uint8_t data);
-uint8_t kff_send_command(uint8_t cmd);
-uint8_t kff_send_ext_command(uint8_t cmd, uint8_t data);
+    return false;
+}
 
-#endif
+/*************************************************
+* C64 bus write callback
+*************************************************/
+FORCE_INLINE void c128_write_handler(u32 control, u32 addr, u32 data)
+{
+    // No write support
+}
+
+// Support C128 2MHz read access
+C64_C128_BUS_HANDLER(c128)

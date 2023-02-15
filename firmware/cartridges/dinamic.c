@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Kim Jørgensen
+ * Copyright (c) 2019-2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -21,11 +21,11 @@
 /*************************************************
 * C64 bus read callback
 *************************************************/
-static inline bool dinamic_read_handler(uint8_t control, uint16_t addr)
+FORCE_INLINE bool dinamic_read_handler(u32 control, u32 addr)
 {
     if (!(control & C64_ROML))
     {
-        c64_data_write(crt_ptr[addr & 0x1fff]);
+        C64_DATA_WRITE(crt_ptr[addr & 0x1fff]);
         return true;
     }
 
@@ -41,7 +41,7 @@ static inline bool dinamic_read_handler(uint8_t control, uint16_t addr)
 /*************************************************
 * C64 bus write callback
 *************************************************/
-static inline void dinamic_write_handler(uint8_t control, uint16_t addr, uint8_t data)
+FORCE_INLINE void dinamic_write_handler(u32 control, u32 addr, u32 data)
 {
     // No write support
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Kim Jørgensen
+ * Copyright (c) 2019-2021 Kim Jørgensen
  *
  * This software is provided 'as-is', without any express or implied
  * warranty.  In no event will the authors be held liable for any damages
@@ -21,17 +21,17 @@
 /*************************************************
 * C64 bus read callback
 *************************************************/
-static inline bool simons_basic_read_handler(uint8_t control, uint16_t addr)
+FORCE_INLINE bool simons_basic_read_handler(u32 control, u32 addr)
 {
     if ((control & (C64_ROML|C64_ROMH)) != (C64_ROML|C64_ROMH))
     {
-        c64_data_write(crt_ptr[addr & 0x3fff]);
+        C64_DATA_WRITE(crt_ptr[addr & 0x3fff]);
         return true;
     }
 
     if (!(control & C64_IO1))
     {
-        c64_crt_control(STATUS_LED_ON|CRT_PORT_8K);
+        C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_8K);
     }
 
     return false;
@@ -40,11 +40,11 @@ static inline bool simons_basic_read_handler(uint8_t control, uint16_t addr)
 /*************************************************
 * C64 bus write callback
 *************************************************/
-static inline void simons_basic_write_handler(uint8_t control, uint16_t addr, uint8_t data)
+FORCE_INLINE void simons_basic_write_handler(u32 control, u32 addr, u32 data)
 {
     if (!(control & C64_IO1))
     {
-        c64_crt_control(STATUS_LED_ON|CRT_PORT_16K);
+        C64_CRT_CONTROL(STATUS_LED_ON|CRT_PORT_16K);
     }
 }
 

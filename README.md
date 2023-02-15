@@ -23,27 +23,40 @@ The gerber files and BOM can be found [here](https://github.com/KimJorgensen/Kun
 ## Supported Cartridges
 The following cartridge types are currently supported:
 
-* Normal cartridge (8k, 16k, Ultimax)
+* Generic cartridge (8k, 16k, Ultimax)
 * Action Replay v4.x/v5/v6
 * KCS Power Cartridge
 * Final Cartridge III(+)
 * Simons' BASIC
 * Fun Play, Power Play
+* Super Games
 * Ocean type 1
 * Epyx Fastload
 * C64 Game System, System 3
+* WarpSpeed
 * Dinamic
 * Zaxxon, Super Zaxxon
 * Magic Desk, Domark, HES Australia
 * Super Snapshot v5
 * Comal-80
 * EasyFlash
+* Prophet64
+* Freeze Frame
+* Freeze Machine
+* Pagefox
+* RGCD, Hucky
+* Drean
+
+* C128 Generic cartridge (external function ROM)
+* WarpSpeed 128
 
 ## Supported File Types
 The following file types are currently supported:
 
 * Cartridge (CRT)
+* C128 external function ROM (ROM, BIN)
 * Disk image (D64, D71, D81)
+* Tape image (T64)
 * Program (PRG, P00)
 * Firmware update (UPD)
 
@@ -51,7 +64,7 @@ The following file types are currently supported:
 The USB port is active while the launcher is running allowing programs to be transferred from a PC using the EasyFlash 3 USB protocol.
 Kung Fu Flash shows up as a standard serial port when connected to a PC not requiring any custom drivers to be installed.
 This means, however, that the program on the PC side must be modified to support Kung Fu Flash.
-For that reason a modified version of [EasyFlash 3 USB Utilities](3rd_party/ef3utils) has been included in this repository.
+For that reason a modified version of [EasyFlash 3 USB Utilities](3rd_party/ef3utils) and [EasyFlash 3 BBS](3rd_party/ef3bbs) has been included in this repository.
 
 ## Firmware Update
 Just place the KungFuFlash_v1.xx.upd file on the SD card and select the file in the launcher to initiate the firmware update.
@@ -64,11 +77,13 @@ Kung Fu Flash is a so called Software Defined Cartridge where a fast microcontro
 This makes it extremely flexible, allowing different cartridge types to be supported at a relative low cost.
 
 However, it can be challenging to get the C64 bus timing correct in software and in some places the timing is very close to the limit.
-Even though Kung Fu Flash has been tested on different models of the Commodore 64, there is a chance that it doesn't work correctly on your specific model.
+Even though Kung Fu Flash has been tested on different models of the Commodore 64, there is a chance that it doesn't work correctly on your specific model, or requires [phi2 offset adjustment](firmware/README.md#diagnostic).
 Use it at your own risk!
 
-Kung Fu Flash will only work with the PAL version of the Commodore 64 or Commodore 128. The NTSC version is currently not supported.
-Disk drive emulation is using kernal vectors and will not work with fast loaders. Currently REL files are not supported and there is no write support.
+Kung Fu Flash will work with the PAL and NTSC version of the Commodore 64 or Commodore 128.
+
+Disk drive emulation is using kernal vectors and will not work with fast loaders or software that uses direct hardware access which a lot of games does.
+Currently REL files are not supported and only a subset of the Commodore DOS commands are supported.
 
 ## Thanks
 Kung Fu Flash was based on or uses other open source projects:
